@@ -330,3 +330,53 @@ This step further refines the ZW Autonomous Agent by allowing its initial prompt
 
 This memory-driven personality makes the agent's initial interaction more contextually aware and stylistically aligned, setting a better stage for the ensuing conversation.
 ```
+
+---
+## Phase 3: ZW Parser + Validator
+
+This phase introduces a foundational module, `zw_mcp/zw_parser.py`, designed to parse, validate, and manipulate ZW-formatted text. This utility is crucial for ensuring data integrity, transforming ZW content for different uses, and aiding in debugging.
+
+### Module: `zw_mcp/zw_parser.py`
+
+This module provides a set of functions to work with ZW-formatted text programmatically.
+
+#### Key Functions:
+
+-   **`parse_zw(zw_text: str) -> dict`**
+    -   **Purpose:** Converts a string of ZW-formatted text into a nested Python dictionary.
+    -   **Details:** Handles indentation to create the nested structure. Lines starting with `#` (comments) or empty lines are ignored. Keys and values are separated by the first colon. A key with no value after the colon (e.g., `PARENT:`) is treated as a parent for a new nested dictionary. List items (e.g., `- ITEM_KEY: ITEM_VAL`) are parsed with the hyphenated part as the literal key.
+    -   **Returns:** A dictionary representing the ZW structure.
+
+-   **`to_zw(d: dict, current_indent_level: int = 0) -> str`**
+    -   **Purpose:** Converts a nested Python dictionary back into a ZW-formatted text string.
+    -   **Details:** Recursively traverses the dictionary, applying indentation (2 spaces per level by default) to reconstruct the ZW hierarchy.
+    -   **Returns:** A string in ZW format.
+
+-   **`validate_zw(zw_text: str) -> bool`**
+    -   **Purpose:** Performs a basic structural validation of ZW-formatted text.
+    -   **Details:** Attempts to parse the text using `parse_zw()`. If parsing is successful and results in a non-empty dictionary, it's considered structurally valid.
+    -   **Returns:** `True` if the text appears valid, `False` otherwise (e.g., if parsing raises an error).
+
+-   **`prettify_zw(zw_text: str) -> str`**
+    -   **Purpose:** Cleans up and standardizes the formatting of ZW text.
+    -   **Details:** Parses the input ZW text into a dictionary using `parse_zw()` and then serializes it back to ZW text using `to_zw()`. This process normalizes indentation and spacing. If parsing fails, the original text is returned to prevent data loss.
+    -   **Returns:** A prettified ZW text string, or the original string if parsing failed.
+
+### Testing the Parser
+
+A test script, `zw_mcp/test_zw_parser.py`, is provided to demonstrate and verify the functionality of the parser module. It can be run directly:
+
+```bash
+python3 zw_mcp/test_zw_parser.py
+```
+This script will output the results of parsing, prettifying, and reconstructing a sample ZW string, along with validation checks.
+
+### Potential Uses:
+
+-   **Validating Ollama Output:** Ensuring responses from Ollama adhere to expected ZW structures.
+-   **Normalizing Memory Entries:** Cleaning up ZW text before storing it in memory logs or using it for future prompts.
+-   **Data Transformation:** Converting ZW data to dictionaries for easier manipulation in Python or for export to other formats (like JSON, although `parse_zw` directly produces a Python dict which can then be easily serialized to JSON using Python's `json` library).
+-   **Interfacing with External Tools:** Preparing ZW data for use in game engines (like Godot), creative tools (like Blender), or other CLI applications.
+
+This parser is a key component for building more complex and reliable ZW-based applications. Future enhancements could include more detailed error reporting with line numbers, schema validation against predefined ZW structures, and more sophisticated list handling.
+```
