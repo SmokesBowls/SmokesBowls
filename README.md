@@ -153,7 +153,6 @@ This networked setup allows various external applications to interface with the 
 
 ### Directory Structure (Updated for Phase 2)
 
-The directory structure remains largely the same, with the addition of the new daemon and client scripts within `zw_mcp/`:
 ```
 zw_mcp/
 ├── zw_mcp_daemon.py        # NEW: TCP Daemon server
@@ -452,7 +451,7 @@ This phase introduces a sophisticated multi-agent orchestration system, enabling
     python3 zw_mcp/zw_agent_hub.py
     ```
 
-4.  **Expected Behavior:**
+4.  **Expected Output & Behavior:**
     -   The hub will load `agent_profiles.json`.
     -   It will start with `master_seed.zw` as the input for the first agent.
     -   Each agent in the profile list will run sequentially.
@@ -813,6 +812,103 @@ The `blender_adapter.py` processes these `ZW-FUNCTION` blocks by adding and conf
         ///
         ```
 
+4.  **`TYPE: PROPERTY_ANIM`**
+    -   **Purpose:** Provides a generic way to animate almost any animatable property of an object or its data over time using keyframes. This is similar to `ZW-ANIMATION` but within the `ZW-STAGE` context.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The name of the ZW-OBJECT to animate.
+        -   `PROPERTY_PATH: "<RNA_Property>"`: The Blender RNA data path to the property (e.g., "location", "scale[0]", "modifiers['MyBevel'].width", "material_slots[0].material.node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value").
+        -   `INDEX: <OptionalInteger>`: Specify for a single component of a vector/array property if `VALUE` is scalar.
+        -   `UNIT: degrees` (Optional): If `PROPERTY_PATH` is rotational and `VALUE`s are in degrees.
+        -   `INTERPOLATION: <BEZIER|LINEAR|CONSTANT>` (Optional): Default is "BEZIER".
+        -   `KEYFRAMES: [{FRAME: <F>, VALUE: <V>}, ...]` : List of keyframe definitions. `VALUE` can be scalar or tuple string.
+    -   **Behavior:** Creates F-Curves and keyframes for the specified property, similar to `ZW-ANIMATION` processing.
+    -   **Example:**
+        ```zw
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: PROPERTY_ANIM
+              TARGET: "StageFXLight"       // A ZW-LIGHT or ZW-OBJECT
+              PROPERTY_PATH: "data.energy" // Animating light energy
+              INTERPOLATION: BEZIER
+              KEYFRAMES:
+                - FRAME: 100
+                  VALUE: 0.0
+                - FRAME: 120
+                  VALUE: 800.0
+                - FRAME: 140
+                  VALUE: 0.0
+        ///
+        ```
+
+5.  **`TYPE: MATERIAL_OVERRIDE`**
+    -   **Purpose:** Temporarily changes the material assigned to an object's material slot for a specified duration.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The ZW-OBJECT whose material will be changed.
+        -   `MATERIAL_NAME: <MaterialToAssignString>`: The name of the Blender material to assign. The adapter will use an existing material or create a new one with this name (and default node setup if new).
+        -   `START_FRAME: <Integer>`: Frame at which the new material is applied.
+        -   `END_FRAME: <OptionalInteger>`: Frame at which to restore the original material.
+        -   `RESTORE_ON_END: "true" | "false"` (Optional): Boolean (as string). If "true" and `END_FRAME` is specified, the object's material at `START_FRAME - 1` is restored at `END_FRAME`. Defaults to "false" or no restoration if `END_FRAME` is missing.
+        -   `SLOT_INDEX: <OptionalInteger>`: The material slot index to target. Defaults to 0.
+    -   **Behavior:** Keyframes the `material_slots[<index>].material` property with `CONSTANT` interpolation.
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          NAME: MyCharacter
+          MATERIAL: DefaultSkinMat // Initial material
+        ///
+        ZW-MATERIAL: // Define the override material (or ensure it exists)
+          NAME: EvilCorruptSkinMat
+          COLOR: "#8B0000" // Dark Red
+          BSDF:
+            ROUGHNESS: 0.8
+        ///
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: MATERIAL_OVERRIDE
+              TARGET: "MyCharacter"
+              MATERIAL_NAME: "EvilCorruptSkinMat"
+              START_FRAME: 50
+              END_FRAME: 100
+              RESTORE_ON_END: "true"
+        ///
+        ```
+
+6.  **`TYPE: SHADER_SWITCH`**
+    -   **Purpose:** Changes and keyframes the value of a specific input socket on a shader node within an object's material.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The ZW-OBJECT whose material will be affected.
+        -   `MATERIAL_NAME: <OptionalMaterialNameString>`: Name of the material to modify. If omitted, uses the object's active material or first material slot.
+        -   `TARGET_NODE: <ShaderNodeNameString>`: The name of the shader node (e.g., "Principled BSDF", "MixRGB_Glow").
+        -   `INPUT_NAME: <SocketNameString>`: The name of the input socket on the `TARGET_NODE` (e.g., "Roughness", "Alpha", "Base Color", "Fac").
+        -   `NEW_VALUE: <ScalarOrTupleString>`: The new value for the socket. Parsed based on socket type (float, color tuple string, vector tuple string, boolean string).
+        -   `FRAME: <Integer>`: The frame at which to set and keyframe this new value.
+    -   **Behavior:** Locates the specified shader node input and keyframes its `default_value` with `CONSTANT` interpolation at the given `FRAME`.
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          NAME: MagicOrb
+          MATERIAL: OrbMaterial
+          COLOR: "#0000FF" // Blue
+          BSDF: {ROUGHNESS: 0.1, EMISSION_STRENGTH: 1.0, EMISSION_COLOR: "#0000FF"}
+        ///
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: SHADER_SWITCH
+              TARGET: "MagicOrb"
+              // MATERIAL_NAME: "OrbMaterial" // Optional if it's the active/first
+              TARGET_NODE: "Principled BSDF"
+              INPUT_NAME: "Emission Strength" // Blender socket name
+              NEW_VALUE: 10.0
+              FRAME: 75
+            - TYPE: SHADER_SWITCH
+              TARGET: "MagicOrb"
+              TARGET_NODE: "Principled BSDF"
+              INPUT_NAME: "Base Color"
+              NEW_VALUE: "(1.0, 0.0, 0.0, 1.0)" // Switch to Red
+              FRAME: 75
+        ///
+        ```
+
 #### How it Works in `blender_adapter.py`:
 
 -   The `process_zw_structure` function now recognizes `ZW-FUNCTION` keys.
@@ -999,6 +1095,115 @@ ZW-ANIMATION:
 
 This `ZW-ANIMATION` system provides a robust way to define complex movements and changes over time directly within the ZW protocol, further enhancing its capability as a scene description and control language.
 
+### Phase 6.9: Cameras and Lights with `ZW-CAMERA` and `ZW-LIGHT`
+
+This phase extends the ZW protocol to support the definition and configuration of camera and light objects within Blender, essential components for rendering and scene composition.
+
+#### ZW Syntax for Cameras (`ZW-CAMERA`):
+
+Defines a camera object with its properties. The `blender_adapter.py` expects the ZW parser to provide the attributes for a `ZW-CAMERA` as a dictionary value if `ZW-CAMERA` is a key.
+
+```zw
+ZW-CAMERA: // This key's value should be the dictionary of attributes below
+  NAME: <CameraNameString>
+  LOCATION: "(x, y, z)"       // Euler angles, in degrees by ZW convention
+  ROTATION: "(rx, ry, rz)"    // Euler angles, in degrees by ZW convention
+  FOV: <FocalLengthFloat>     // Field of View in millimeters (e.g., 35, 50)
+  CLIP_START: <Float>         // Near clipping distance
+  CLIP_END: <Float>           // Far clipping distance
+  TRACK_TARGET: <TargetObjectNameString> // Optional: Name of an object for a 'Track To' constraint
+  COLLECTION: <CollectionNameString>   // Optional: Assign to a specific collection
+///
+```
+
+-   **`NAME`**: The name for the camera object in Blender.
+-   **`LOCATION`**: World-space coordinates `(x, y, z)` as a string tuple.
+-   **`ROTATION`**: Euler rotation `(rx, ry, rz)` in degrees as a string tuple. The adapter converts to radians.
+-   **`FOV`**: Camera lens focal length in millimeters.
+-   **`CLIP_START`, `CLIP_END`**: Near and far clipping distances.
+-   **`TRACK_TARGET`** (Optional): The name of an existing ZW-OBJECT that this camera should track using a 'Track To' constraint (tracks with its -Z axis, Y-axis up).
+-   **`COLLECTION`** (Optional): Assigns the camera to a specific Blender collection.
+
+#### ZW Syntax for Lights (`ZW-LIGHT`):
+
+Defines a light object with its properties. Similar to `ZW-CAMERA`, the adapter expects the attributes as a dictionary value.
+
+```zw
+ZW-LIGHT: // This key's value should be the dictionary of attributes below
+  NAME: <LightNameString>
+  LOCATION: "(x, y, z)"
+  ROTATION: "(rx, ry, rz)"    // Euler angles, in degrees
+  TYPE: <POINT|SUN|SPOT|AREA> // Type of light
+  COLOR: "<#RRGGBB>" | "(R,G,B,A)" // Light color
+  ENERGY: <Float>             // Light intensity/strength
+  SHADOW: "true" | "false"    // Enable or disable shadows (boolean as string)
+  SIZE: <Float>               // Affects shadow softness (for POINT, SUN, SPOT) or physical size (for AREA)
+  COLLECTION: <CollectionNameString>   // Optional: Assign to a specific collection
+///
+```
+
+-   **`NAME`**: The name for the light object in Blender.
+-   **`LOCATION`, `ROTATION`**: World-space transform, rotation in degrees (converted to radians by adapter).
+-   **`TYPE`**: The type of Blender light. Supported: `POINT`, `SUN`, `SPOT`, `AREA`.
+-   **`COLOR`**: Light color, specified as a hex string (e.g., `"#FFFFE0"`) or an RGBA tuple string (e.g., `"(0.7, 0.7, 1.0, 1.0)"`). Parsed by `parse_color`.
+-   **`ENERGY`**: The strength or intensity of the light.
+-   **`SHADOW`**: `"true"` or `"false"` (case-insensitive) to enable/disable shadows.
+-   **`SIZE`**: Interpretation depends on `TYPE`:
+    -   `POINT`, `SPOT`: Radius for soft shadows.
+    -   `SUN`: Angular diameter for soft shadows (Blender's `angle` property).
+    -   `AREA`: Physical size (e.g., for one dimension if shape is Square/Rectangle).
+-   **`COLLECTION`** (Optional): Assigns the light to a specific Blender collection.
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function now recognizes `ZW-CAMERA` and `ZW-LIGHT` as top-level keys (or however the parser structures them based on the ZW input) and passes their attribute dictionaries to new handler functions: `handle_zw_camera_block` and `handle_zw_light_block`.
+-   **`handle_zw_camera_block`**:
+    -   Parses attributes, converting rotation to radians.
+    -   Creates a new camera object in Blender (`bpy.ops.object.camera_add()`).
+    -   Sets its name, location, and rotation.
+    -   Configures camera-specific data like `lens` (FOV), `clip_start`, and `clip_end`.
+    -   If `TRACK_TARGET` is specified, it finds the target object and applies a 'Track To' constraint.
+    -   Assigns the camera to the specified or current collection.
+-   **`handle_zw_light_block`**:
+    -   Parses attributes, converting rotation to radians and color using `parse_color`.
+    -   Creates a new light datablock (`bpy.data.lights.new()`) and a corresponding Blender object.
+    -   Sets the light object's transform and links it to the appropriate collection.
+    -   Configures light-specific data: `type`, `color`, `energy`, `use_shadow`, and `size`/`angle` based on the light type.
+
+#### Example:
+
+```zw
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: FocusPointCube
+  LOCATION: (0,0,1)
+  COLLECTION: SceneTargets
+///
+
+ZW-CAMERA:
+  NAME: TrackingCam
+  LOCATION: (0, -10, 2)
+  ROTATION: "(0,0,0)" // Will be overridden by Track To if target found
+  FOV: 80
+  TRACK_TARGET: FocusPointCube
+  COLLECTION: Cameras
+///
+
+ZW-LIGHT:
+  NAME: MainSun
+  LOCATION: (5, 5, 5)
+  ROTATION: "(45,0,45)"
+  TYPE: SUN
+  COLOR: "#FFF5E1" // Warm white
+  ENERGY: 2.0
+  SIZE: 0.05 // Small angle for sharper sun shadows
+  SHADOW: "true"
+  COLLECTION: Lights
+///
+```
+
+This addition allows ZW to define not just the subjects of a scene, but also how they are viewed and illuminated, completing a more comprehensive scene description toolset.
+
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
 
@@ -1176,3 +1381,157 @@ zw_mcp/
 
 This adapter represents a significant step towards using ZW as a descriptive language for generating and manipulating 3D content, opening possibilities for agent-driven world-building or procedural asset creation.
 ```
+
+---
+## Phase 8.0: Scene Composition via `ZW-STAGE` (Initial Implementation)
+
+This phase introduces the `ZW-STAGE` block, enabling timeline-based orchestration of scene elements and events within Blender. It allows for sequencing camera switches, object visibility changes, and light animations, forming the foundation for more complex cinematic and narrative control directly from ZW.
+
+### ZW Syntax for Staging (`ZW-STAGE`):
+
+A `ZW-STAGE` block defines a sequence of events or states over time using a list of "tracks".
+
+```zw
+ZW-STAGE:
+  NAME: <OptionalStageName> // A descriptive name for this stage or sequence
+  TRACKS:                  // A list of track definitions
+    - TYPE: <TrackTypeString>
+      TARGET: <TargetObjectNameString>
+      START: <StartFrameInteger>
+      END: <OptionalEndFrameInteger> // Meaning varies by track type
+      // ... other parameters specific to the TrackType ...
+    // ... more tracks ...
+///
+```
+
+-   **`NAME`** (Optional): An identifier for the stage.
+-   **`TRACKS`**: A list of dictionaries, where each dictionary defines a single timed event or state change.
+
+#### Common Track Parameters:
+
+-   **`TYPE`**: A string identifying the kind of event (e.g., "CAMERA", "VISIBILITY", "LIGHT_INTENSITY").
+-   **`TARGET`**: The `NAME` of the ZW-defined Blender object, camera, or light that this track affects.
+-   **`START: <Integer>`**: The frame number at which this track event begins or is set.
+-   **`END: <Integer>`** (Optional): The frame number at which an event might end or transition. Its usage is specific to the `TYPE`.
+
+#### Initially Supported Track Types:
+
+1.  **`TYPE: CAMERA`**
+    -   **Purpose:** Sets the active scene camera.
+    -   **Specific Parameters:**
+        -   `TARGET`: Name of a `ZW-CAMERA` object.
+    -   **Behavior:** At the `START` frame, `bpy.context.scene.camera` is set to the specified target camera, and a keyframe is inserted for this property.
+        *(Note: For this initial pass, if multiple CAMERA tracks exist, the one with the latest `START` frame before or at the current frame during playback will effectively be active. True "duration" for a camera shot might involve more complex NLA/marker setups in future enhancements).*
+    -   **Example:**
+        ```zw
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: CAMERA
+              TARGET: "MainOverviewCam"
+              START: 1
+            - TYPE: CAMERA
+              TARGET: "PlayerCloseUpCam"
+              START: 150
+        ///
+        ```
+
+2.  **`TYPE: VISIBILITY`**
+    -   **Purpose:** Controls the viewport and render visibility of an object.
+    -   **Specific Parameters:**
+        -   `TARGET`: Name of a `ZW-OBJECT`.
+        -   `STATE: "SHOW" | "HIDE"`: Determines whether to make the object visible or hidden.
+    -   **Behavior:** At the `START` frame, the `target_obj.hide_viewport` and `target_obj.hide_render` properties are keyframed according to the `STATE` (`hide_viewport = False` for "SHOW", `True` for "HIDE").
+    -   **Example:**
+        ```zw
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: VISIBILITY
+              TARGET: "SecretTreasure"
+              START: 1
+              STATE: "HIDE"
+            - TYPE: VISIBILITY
+              TARGET: "SecretTreasure"
+              START: 200
+              STATE: "SHOW"
+        ///
+        ```
+
+3.  **`TYPE: LIGHT_INTENSITY`**
+    -   **Purpose:** Animates the energy (intensity) of a light.
+    -   **Specific Parameters:**
+        -   `TARGET`: Name of a `ZW-LIGHT` object.
+        -   `VALUE: <Float>`: The light's energy value to be set at the `START` frame.
+        -   `END_VALUE: <Float>` (Optional): If provided along with an `END` frame, the energy will be animated from `VALUE` (at `START`) to `END_VALUE` (at `END`). If `END_VALUE` is omitted, the energy is simply set to `VALUE` at `START`.
+        -   `END: <Integer>` (Optional): The frame at which `END_VALUE` should be reached.
+    -   **Behavior:** Keyframes are inserted for the `target_obj.data.energy` property at the `START` frame (with `VALUE`) and, if `END` and `END_VALUE` are provided, at the `END` frame (with `END_VALUE`).
+    -   **Example:**
+        ```zw
+        ZW-LIGHT:
+          NAME: MySpotlight
+          TYPE: SPOT
+          ENERGY: 100
+        ///
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: LIGHT_INTENSITY
+              TARGET: "MySpotlight"
+              START: 10
+              VALUE: 500 // Brighten at frame 10
+            - TYPE: LIGHT_INTENSITY
+              TARGET: "MySpotlight"
+              START: 50
+              VALUE: 1500 // Brighten further
+              END: 100
+              END_VALUE: 0 // Fade to black by frame 100
+        ///
+        ```
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function now recognizes `ZW-STAGE` keys and passes the associated dictionary to a new `handle_zw_stage_block` function.
+-   `handle_zw_stage_block` iterates through the `TRACKS` list.
+-   For each track, it identifies the `TYPE` and calls specific logic to:
+    -   Find the target Blender entity (object, camera, light).
+    -   Set and keyframe the appropriate Blender properties at the specified `START` (and `END` if applicable) frames. For instance, for `VISIBILITY`, it keyframes `hide_viewport` and `hide_render`. For `LIGHT_INTENSITY`, it keyframes `light.data.energy`. For `CAMERA`, it keyframes `scene.camera`.
+
+This initial implementation of `ZW-STAGE` provides a foundational system for scripting basic timeline events and scene dynamics using the ZW protocol.
+
+---
+## ZW Tools: Utility & R&D Lab Scripts
+
+This section covers utility scripts that support the development, testing, and management of ZW files and the ZW MCP ecosystem. These tools are typically run standalone and are not part of the core runtime libraries like `blender_adapter.py` or `ollama_agent.py`.
+
+### `tools/zw_import_watcher.py`
+
+-   **Purpose:** Monitors a specified local folder for new `.zw` (ZW Template) files, performs a basic validation check on them, and then sorts them into a "validated" folder or logs them as "rejected". This script is intended as a utility for research and development, helping to manage incoming ZW patterns or templates before they are formally integrated or used by more complex parts of the system.
+-   **Functionality:**
+    -   **Monitored Folder:** `zw_drop_folder/experimental_patterns/` (relative to the project root where the script is ideally run, or where `zw_drop_folder` is created).
+    -   **Validation (Placeholder):** The current validation logic in `validate_zw_template()` is a placeholder. It first checks if a file contains the line "ENTROPY:" (as per an earlier user specification for a particular template type). If not found, as a fallback for more general ZW files, it checks for the presence of common ZW structural tags such as "ZW-OBJECT:", "TYPE:", "ZW-STAGE:", "ZW-CAMERA:", "ZW-LIGHT:", "ZW-FUNCTION:", "ZW-DRIVER:", or "ZW-ANIMATION:". A file is considered valid if either the "ENTROPY:" line or at least one of the basic structural tags is detected. This function is intended to be replaced or augmented with calls to a more robust ZW schema validator or the `zw_parser.validate_zw()` function as the ZW protocol matures.
+    -   **Output Folders:**
+        -   Valid files are copied to `zw_drop_folder/validated_patterns/`.
+        -   A log of all processed files (both validated and rejected) with timestamps and validation messages is appended to `zw_drop_folder/research_notes/what_worked.md`.
+    -   **Operation:** The script continuously polls the watch folder every 3 seconds. It keeps track of files it has already seen in the current session to only process new additions.
+    -   **Directory Setup:** On startup, the script will attempt to create the `WATCH_FOLDER`, `VALIDATED_FOLDER`, and the directory for `RESEARCH_LOG` (`zw_drop_folder/research_notes/`) if they don't already exist. These paths are rooted in a `zw_drop_folder` created at the project root level.
+
+-   **How to Run:**
+    1.  Navigate to the root directory of the ZW MCP project in your terminal.
+    2.  Ensure the `tools/` directory and `zw_import_watcher.py` script are present.
+    3.  Run the script using Python:
+        ```bash
+        python tools/zw_import_watcher.py
+        ```
+    4.  The script will start monitoring the `zw_drop_folder/experimental_patterns/` directory.
+    5.  To stop the watcher, press `Ctrl+C` in the terminal where it's running.
+
+-   **Expected Directory Structure for Operation (created by the script if not present, relative to project root):**
+    ```
+    zw_drop_folder/
+    ├── experimental_patterns/   # Drop new .zw files here
+    ├── validated_patterns/      # Valid .zw files are copied here
+    └── research_notes/
+        └── what_worked.md       # Log of processing results
+    ```
+
+-   **Note:** This script is primarily for development and pattern management workflows. The paths and validation logic are currently hardcoded but could be made configurable in future versions. Internally, it uses `pathlib` for robust cross-platform path management and ensures UTF-8 encoding for file operations.
+
+[end of README.md]
