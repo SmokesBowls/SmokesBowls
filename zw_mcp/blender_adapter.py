@@ -44,6 +44,30 @@ def safe_eval(str_val, default_val):
         print(f"    [!] Warning: Could not evaluate string '{str_val}' for attribute: {e}. Using default: {default_val}")
         return default_val
 
+def get_or_create_collection(name: str, parent_collection=None):
+    """
+    Gets an existing collection by name or creates it under the parent_collection.
+    If parent_collection is None, uses the scene's master collection.
+    """
+    if not bpy:
+        print("[!] bpy not available. Skipping collection get/create.")
+        return None
+
+    if parent_collection is None:
+        parent_collection = bpy.context.scene.collection
+
+    # Check if collection already exists as a child of the parent_collection
+    existing_collection = parent_collection.children.get(name)
+    if existing_collection:
+        print(f"    Found existing collection: '{name}' in '{parent_collection.name}'")
+        return existing_collection
+    else:
+        # Create new collection and link it to the parent_collection
+        new_collection = bpy.data.collections.new(name=name)
+        parent_collection.children.link(new_collection)
+        print(f"    Created and linked new collection: '{name}' to '{parent_collection.name}'")
+        return new_collection
+
 def parse_color(color_str_val, default_color=(0.8, 0.8, 0.8, 1.0)):
     if not isinstance(color_str_val, str):
         return default_color
@@ -248,59 +272,95 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
     return created_bpy_obj
 
 
-def process_zw_structure(data_dict: dict, parent_bpy_obj=None): # Renamed data to data_dict
+def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_collection=None):
     """
     Recursively processes the parsed ZW structure to find and create objects.
-    Passes parent_bpy_obj for parenting.
+    Passes parent_bpy_obj for parenting and current_bpy_collection for collection assignment.
     """
+    if not bpy: # Should be checked at the start of run_blender_adapter ideally
+        return
+
+    if current_bpy_collection is None:
+        current_bpy_collection = bpy.context.scene.collection # Default to scene's master collection
+
     if not isinstance(data_dict, dict):
         return
 
     for key, value in data_dict.items():
-        current_bpy_object_for_children = None # Will hold the Blender obj created at this level
+        created_bpy_object_for_current_zw_object = None
+        obj_attributes_for_current_zw_object = None
+        target_collection_for_this_object = current_bpy_collection # Default for current object
 
-        # Case 1: ZW-OBJECT: { TYPE: Cube, NAME: MyCube ... }
-        if key.upper() == "ZW-OBJECT" and isinstance(value, dict):
-            obj_attributes = value
-            current_bpy_object_for_children = handle_zw_object_creation(obj_attributes, parent_bpy_obj)
+        # Handle ZW-COLLECTION blocks first to set context for children
+        if key.upper().startswith("ZW-COLLECTION"):
+            collection_name = key.split(":", 1)[1].strip() if ":" in key else key.replace("ZW-COLLECTION", "").strip()
+            if not collection_name: collection_name = "Unnamed_ZW_Collection"
 
-        # Case 2: ZW-OBJECT: Sphere (simple type string)
-        elif key.upper() == "ZW-OBJECT" and isinstance(value, str):
-            obj_attributes = {"TYPE": value}
-            current_bpy_object_for_children = handle_zw_object_creation(obj_attributes, parent_bpy_obj)
+            print(f"[*] Processing ZW-COLLECTION block: '{collection_name}' under '{current_bpy_collection.name}'")
+            block_bpy_collection = get_or_create_collection(collection_name, parent_collection=current_bpy_collection)
 
-        # Case 3: Key itself is an object type, e.g. Cube: { NAME: MyCube ... }
+            if isinstance(value, dict) and "CHILDREN" in value and isinstance(value["CHILDREN"], list):
+                for child_def_item in value["CHILDREN"]:
+                    if isinstance(child_def_item, dict):
+                        process_zw_structure(child_def_item, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
+            elif isinstance(value, dict) : # If it's a dict but no CHILDREN, process its content in new collection context
+                process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
+            continue # Finished processing this ZW-COLLECTION key
+
+        # Identify ZW-OBJECT definitions
+        if key.upper() == "ZW-OBJECT":
+            if isinstance(value, dict): # ZW-OBJECT: { TYPE: Cube, ... }
+                obj_attributes_for_current_zw_object = value
+            elif isinstance(value, str): # ZW-OBJECT: Sphere
+                obj_attributes_for_current_zw_object = {"TYPE": value}
         elif key.lower() in ["sphere", "cube", "plane", "cone", "cylinder", "torus"] and isinstance(value, dict):
-            obj_attributes = value.copy()
-            obj_attributes["TYPE"] = key
-            current_bpy_object_for_children = handle_zw_object_creation(obj_attributes, parent_bpy_obj)
+            # Cube: { NAME: MyCube ... }
+            obj_attributes_for_current_zw_object = value.copy()
+            obj_attributes_for_current_zw_object["TYPE"] = key # Add type from the key itself
 
-        # After potential object creation, check for CHILDREN in its definition dict (value)
-        # This applies if 'value' was the dict containing attributes, including CHILDREN.
-        # This is relevant for Case 1 and Case 3 where 'value' is a dict.
-        if isinstance(value, dict) and current_bpy_object_for_children: # Check if an object was created from this 'value'
-            children_list = value.get("CHILDREN")
-            if children_list and isinstance(children_list, list):
-                print(f"[*] Processing CHILDREN for '{current_bpy_object_for_children.name}'...")
-                for child_item_definition in children_list:
-                    if isinstance(child_item_definition, dict):
-                        # The child_item_definition is expected to be a ZW-OBJECT structure itself,
-                        # e.g., {"ZW-OBJECT": {"TYPE": "Sphere", ...}} or directly {"TYPE": "Sphere", ...}
-                        # process_zw_structure will handle these forms.
-                        process_zw_structure(child_item_definition, parent_bpy_obj=current_bpy_object_for_children)
-                    else:
-                        print(f"    [!] Warning: Item in CHILDREN list is not a dictionary: {child_item_definition}")
-            elif children_list is not None: # Exists but not a list
-                 print(f"    [!] Warning: CHILDREN attribute for '{current_bpy_object_for_children.name}' is not a list: {type(children_list)}")
+        # If a ZW-OBJECT was identified, create it and handle its collection and children
+        if obj_attributes_for_current_zw_object:
+            created_bpy_object_for_current_zw_object = handle_zw_object_creation(obj_attributes_for_current_zw_object, parent_bpy_obj)
 
+            if created_bpy_object_for_current_zw_object:
+                # Determine target collection for this specific object
+                explicit_collection_name = obj_attributes_for_current_zw_object.get("COLLECTION")
+                if explicit_collection_name:
+                    # Explicit collections are always top-level relative to scene master for now
+                    target_collection_for_this_object = get_or_create_collection(explicit_collection_name, parent_collection=bpy.context.scene.collection)
+                # else: it remains the current_bpy_collection passed in or set by a ZW-COLLECTION block
 
-        # Recursive call for other nested structures (like ZW-NESTED-DETAILS or other general groups)
-        # These groups don't create their own Blender objects to become parents, so pass original parent_bpy_obj
-        elif isinstance(value, dict) and not current_bpy_object_for_children: # If no object was created at this key-value pair
-            if key.upper() == "ZW-NESTED-DETAILS":
-                print(f"[*] Processing ZW-NESTED-DETAILS (semantic parent link: {value.get('PARENT')})...")
+                # Link object to its target collection, unlinking from others (e.g., default scene collection)
+                if target_collection_for_this_object:
+                    # Unlink from all collections it might currently be in
+                    for coll in created_bpy_object_for_current_zw_object.users_collection:
+                        coll.objects.unlink(created_bpy_object_for_current_zw_object)
+                    # Link to the target collection
+                    target_collection_for_this_object.objects.link(created_bpy_object_for_current_zw_object)
+                    print(f"    Linked '{created_bpy_object_for_current_zw_object.name}' to collection '{target_collection_for_this_object.name}'")
 
-            process_zw_structure(value, parent_bpy_obj=parent_bpy_obj) # Pass original parent
+                # Process CHILDREN of this ZW-OBJECT
+                children_list = obj_attributes_for_current_zw_object.get("CHILDREN")
+                if children_list and isinstance(children_list, list):
+                    print(f"[*] Processing CHILDREN for '{created_bpy_object_for_current_zw_object.name}' in collection '{target_collection_for_this_object.name}'")
+                    for child_item_definition in children_list:
+                        if isinstance(child_item_definition, dict):
+                            process_zw_structure(child_item_definition,
+                                                 parent_bpy_obj=created_bpy_object_for_current_zw_object,
+                                                 current_bpy_collection=target_collection_for_this_object) # Children inherit parent's collection unless specified otherwise
+                        else:
+                            print(f"    [!] Warning: Item in CHILDREN list is not a dictionary: {child_item_definition}")
+                elif children_list is not None:
+                     print(f"    [!] Warning: CHILDREN attribute for an object is not a list: {type(children_list)}")
+            continue # Finished processing this ZW-OBJECT key
+
+        # Recursive call for other nested structures (like ZW-NESTED-DETAILS or general groups)
+        # These do not create their own Blender objects to become parents, nor do they define a new collection context by themselves.
+        elif isinstance(value, dict):
+            if key.upper() == "ZW-NESTED-DETAILS": # ZW-NESTED-DETAILS doesn't form a collection by its key
+                print(f"[*] Processing ZW-NESTED-DETAILS (semantic parent link: {value.get('PARENT')}). Using collection '{current_bpy_collection.name}'")
+
+            process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=current_bpy_collection)
 
 
 def run_blender_adapter():
@@ -318,12 +378,6 @@ def run_blender_adapter():
     # Ensure we are in Object Mode
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Optional: Clear existing mesh objects for a clean slate (be careful with this)
-    # bpy.ops.object.select_all(action='DESELECT')
-    # bpy.ops.object.select_by_type(type='MESH')
-    # bpy.ops.object.delete()
-    # print("[*] Cleared existing mesh objects from the scene.")
 
     try:
         with open(ZW_INPUT_FILE_PATH, "r", encoding="utf-8") as f:
@@ -348,7 +402,6 @@ def run_blender_adapter():
         parsed_zw_data = parse_zw(zw_text_content)
         if not parsed_zw_data:
             print("[!] Warning: Parsed ZW data is empty. No objects will be created.")
-        # print(f"[*] Parsed data (preview): {str(parsed_zw_data)[:500]}") # For debugging
     except Exception as e:
         print(f"[X] Error parsing ZW text: {e}")
         print("--- ZW Blender Adapter Finished (with errors) ---")
@@ -356,7 +409,8 @@ def run_blender_adapter():
 
     try:
         print("[*] Processing ZW structure for Blender object creation...")
-        process_zw_structure(parsed_zw_data)
+        # Initial call starts with scene's master collection
+        process_zw_structure(parsed_zw_data, current_bpy_collection=bpy.context.scene.collection)
         print("[*] Finished processing ZW structure.")
     except Exception as e:
         print(f"[X] Error during ZW structure processing for Blender: {e}")

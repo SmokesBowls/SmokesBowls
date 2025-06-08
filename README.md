@@ -655,6 +655,82 @@ The `blender_adapter.py` applies these attributes with the following precedence 
 
 This system allows for a flexible range of visual definitions, from simple named materials or colored objects to finely tuned PBR (Physically Based Rendering) appearances via the BSDF properties.
 
+### Phase 6.4: Collections and Grouping
+
+To improve scene organization and management within Blender, the ZW protocol now supports assigning objects to specific **Collections** and defining named collection groups.
+
+#### ZW Syntax for Collections:
+
+Two primary methods are available for organizing objects into Blender Collections:
+
+1.  **Explicit `COLLECTION` Attribute on `ZW-OBJECT`**:
+    Assigns an individual object directly to a named Blender Collection. If the collection doesn't exist at the top level of the scene, it will be created.
+
+    ```zw
+    ZW-OBJECT:
+      TYPE: Sphere
+      NAME: My孤立Sphere // "MyIsolatedSphere"
+      LOCATION: (5, 5, 5)
+      COLLECTION: SpecialEffects // This sphere will be in "SpecialEffects" collection
+    ///
+    ```
+
+2.  **`ZW-COLLECTION` Block for Scoped Grouping**:
+    Defines a named Blender Collection and places all `ZW-OBJECT`s (and nested `ZW-COLLECTION`s) defined within its `CHILDREN` list into this collection.
+    The ZW parser is expected to handle `ZW-COLLECTION: <CollectionName>` as the key, where `<CollectionName>` is the desired name for the collection in Blender. The value associated with this key should be a dictionary, typically containing a `CHILDREN` list.
+    Alternatively, if the ZW is structured as `ZW-COLLECTION:
+  NAME: <CollectionName>
+  CHILDREN: ...`, the adapter will use the `NAME` attribute for the collection. (The current adapter implementation primarily expects the collection name as part of the key like `ZW-COLLECTION: MyGroup`).
+
+    **Example:**
+    ```zw
+    ZW-COLLECTION: EnvironmentProps // Creates/uses "EnvironmentProps" collection
+      CHILDREN:
+        - ZW-OBJECT:
+            TYPE: Cube
+            NAME: Rock01
+            LOCATION: (10, 0, 0.5)
+        - ZW-OBJECT:
+            TYPE: Cube
+            NAME: Rock02
+            LOCATION: (10.5, 0.2, 0.5)
+        - ZW-COLLECTION: Foliage // Nested collection "Foliage" within "EnvironmentProps"
+            CHILDREN:
+              - ZW-OBJECT:
+                  TYPE: Cone
+                  NAME: Tree01
+                  LOCATION: (12, 0, 1.5)
+                  COLLECTION: ForestAssets // This object goes into "ForestAssets", not "Foliage" or "EnvironmentProps"
+                                          // due to explicit assignment taking precedence for the object itself.
+              - ZW-OBJECT:
+                  TYPE: Sphere
+                  NAME: Bush01
+                  LOCATION: (12.5,0.5,0.25)
+                  // This object will be in the "Foliage" collection.
+    ///
+    ```
+
+#### How it Works in `blender_adapter.py`:
+
+-   **`get_or_create_collection(name, parent_collection=None)`**: A helper function is used to retrieve an existing Blender Collection by name or create a new one. If `parent_collection` is provided, the new collection is created as its child, allowing for nested collection structures.
+-   **`process_zw_structure(data_dict, parent_bpy_obj=None, current_bpy_collection=None)`**:
+    -   This function now manages a `current_bpy_collection` context (defaulting to the scene's master collection).
+    -   **Handling `ZW-COLLECTION: <Name>` keys**: When such a key is encountered, the adapter calls `get_or_create_collection` for `<Name>`, using the `current_bpy_collection` as its parent. All ZW definitions within this block's `CHILDREN` list are then processed with this new collection as their `current_bpy_collection`.
+    -   **Handling `ZW-OBJECT`**:
+        -   After a Blender object is created, the adapter determines its final collection.
+        -   If the ZW-OBJECT has an explicit `COLLECTION: <SpecificName>` attribute, that object is linked to the `<SpecificName>` collection (which is created at the scene's top level if it doesn't exist). This overrides any inherited collection context for that specific object.
+        -   Otherwise, the object is linked to the `current_bpy_collection` passed down by its parent ZW structure (either a `ZW-COLLECTION` block or the scene's default collection).
+        -   The object is unlinked from any other collections (like the default scene collection if it was placed there temporarily) to ensure it resides only in its intended target collection.
+    -   Children of a `ZW-OBJECT` (defined under its `CHILDREN` key for parenting) will inherit the collection of their parent `ZW-OBJECT` as their `current_bpy_collection` context, unless they themselves have an explicit `COLLECTION` attribute or are within a nested `ZW-COLLECTION` block.
+
+#### Result in Blender:
+
+-   Objects will be organized into the specified collections in Blender's Outliner.
+-   `ZW-COLLECTION` blocks allow for creating hierarchical collection structures.
+-   This enables easier management, visibility toggling, and selection of object groups within complex scenes.
+
+This collection system provides a powerful way to structure and manage ZW-generated scenes, mirroring common practices in 3D production workflows.
+
 ### How to Use the Blender Adapter:
 
 1.  **Prerequisites:**
