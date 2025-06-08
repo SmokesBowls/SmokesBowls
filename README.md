@@ -1506,7 +1506,7 @@ This section covers utility scripts that support the development, testing, and m
 -   **Purpose:** Monitors a specified local folder for new `.zw` (ZW Template) files, performs a basic validation check on them, and then sorts them into a "validated" folder or logs them as "rejected". This script is intended as a utility for research and development, helping to manage incoming ZW patterns or templates before they are formally integrated or used by more complex parts of the system.
 -   **Functionality:**
     -   **Monitored Folder:** `zw_drop_folder/experimental_patterns/` (relative to the project root where the script is ideally run, or where `zw_drop_folder` is created).
-    -   **Validation (Placeholder):** The current validation logic in `validate_zw_template()` is a placeholder. It checks if a file contains the line "ENTROPY:" (as per original user spec) or, as a basic fallback, "ZW-OBJECT:" and "TYPE:". This function is intended to be replaced or augmented with calls to a more robust ZW schema validator or the `zw_parser.validate_zw()` function as the ZW protocol matures.
+    -   **Validation (Placeholder):** The current validation logic in `validate_zw_template()` is a placeholder. It first checks if a file contains the line "ENTROPY:" (as per an earlier user specification for a particular template type). If not found, as a fallback for more general ZW files, it checks for the presence of common ZW structural tags such as "ZW-OBJECT:", "TYPE:", "ZW-STAGE:", "ZW-CAMERA:", "ZW-LIGHT:", "ZW-FUNCTION:", "ZW-DRIVER:", or "ZW-ANIMATION:". A file is considered valid if either the "ENTROPY:" line or at least one of the basic structural tags is detected. This function is intended to be replaced or augmented with calls to a more robust ZW schema validator or the `zw_parser.validate_zw()` function as the ZW protocol matures.
     -   **Output Folders:**
         -   Valid files are copied to `zw_drop_folder/validated_patterns/`.
         -   A log of all processed files (both validated and rejected) with timestamps and validation messages is appended to `zw_drop_folder/research_notes/what_worked.md`.
@@ -1532,6 +1532,6 @@ This section covers utility scripts that support the development, testing, and m
         └── what_worked.md       # Log of processing results
     ```
 
--   **Note:** This script is primarily for development and pattern management workflows. The paths and validation logic are currently hardcoded but could be made configurable in future versions.
+-   **Note:** This script is primarily for development and pattern management workflows. The paths and validation logic are currently hardcoded but could be made configurable in future versions. Internally, it uses `pathlib` for robust cross-platform path management and ensures UTF-8 encoding for file operations.
 
 [end of README.md]
