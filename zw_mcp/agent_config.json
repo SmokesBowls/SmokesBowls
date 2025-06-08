@@ -1,0 +1,9 @@
+{
+  "prompt_path": "zw_mcp/prompts/example.zw",
+  "host": "127.0.0.1",
+  "port": 7421,
+  "max_rounds": 3,
+  "stop_keywords": ["END_SCENE", "///"],
+  "log_path": "zw_mcp/logs/agent.log",
+  "memory_enabled": false
+}

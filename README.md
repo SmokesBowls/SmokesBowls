@@ -170,3 +170,86 @@ zw_mcp/
 ```
 Note: The `responses/` directory is primarily used by the CLI tool (`zw_mcp_server.py`). The daemon sends responses directly back to the client.
 ```
+
+---
+
+## Phase 2.5: ZW Autonomous Agent (Step 1: Single Pass)
+
+This phase introduces an autonomous agent capable of interacting with the ZW MCP Daemon based on a configuration file. This first step implements a single-pass (one prompt, one response) version of the agent.
+
+### New Files for Agent (Step 1)
+
+- **`zw_mcp/agent_config.json`**:
+    - A JSON configuration file that controls the agent's behavior.
+    - **Example Content:**
+      ```json
+      {
+        "prompt_path": "zw_mcp/prompts/example.zw",
+        "host": "127.0.0.1",
+        "port": 7421,
+        "max_rounds": 3,
+        "stop_keywords": ["END_SCENE", "///"],
+        "log_path": "zw_mcp/logs/agent.log",
+        "memory_enabled": false
+      }
+      ```
+    - Key settings for Step 1:
+        - `prompt_path`: Path to the initial ZW prompt file.
+        - `host`, `port`: Network details for the ZW MCP Daemon.
+        - `log_path`: File path for logging agent interactions.
+    - `max_rounds`, `stop_keywords`, `memory_enabled` are placeholders for future agent enhancements.
+
+- **`zw_mcp/ollama_agent.py` (Single-Pass Version)**:
+    - The initial Python script for the autonomous agent.
+    - Reads its operational parameters from `zw_mcp/agent_config.json`.
+    - Loads the initial prompt specified in the config.
+    - Connects to the `zw_mcp_daemon.py` and sends the prompt.
+    - Receives the response from the daemon.
+    - Prints the response to the console.
+    - Logs the prompt and response to the file specified by `log_path` in the config (e.g., `zw_mcp/logs/agent.log`).
+    - Includes error handling for file operations, configuration loading, and network communication.
+
+### How to Use the Single-Pass Agent
+
+1.  **Ensure the ZW MCP Daemon is running:**
+    If not already running, start it in a separate terminal:
+    ```bash
+    python3 zw_mcp/zw_mcp_daemon.py
+    ```
+
+2.  **Configure the Agent (Optional but Recommended):**
+    Review and edit `zw_mcp/agent_config.json` to ensure `prompt_path`, `host`, `port`, and `log_path` are set as desired. The default `prompt_path` is `zw_mcp/prompts/example.zw`.
+
+3.  **Run the Autonomous Agent:**
+    In another terminal, execute the agent script:
+    ```bash
+    python3 zw_mcp/ollama_agent.py
+    ```
+
+4.  **Expected Output:**
+    - The agent will print status messages (connecting, sending prompt).
+    - The final response from Ollama (via the daemon) will be printed to the console.
+    - The interaction (initial prompt and Ollama's response) will be appended to the log file specified in `agent_config.json` (e.g., `zw_mcp/logs/agent.log`).
+
+### Directory Structure (Updated for Agent - Step 1)
+
+```
+zw_mcp/
+├── agent_config.json       # NEW: Configuration for the agent
+├── ollama_agent.py         # NEW: Autonomous agent script
+├── zw_mcp_daemon.py        # TCP Daemon server
+├── client_example.py       # Example TCP client
+├── zw_mcp_server.py        # CLI tool
+├── ollama_handler.py       # Handles API requests to Ollama
+├── prompts/
+│   └── example.zw          # Example ZW input prompt
+├── responses/
+│   └──                     # Directory for saved CLI responses
+└── logs/
+    ├── agent.log           # NEW: Log for autonomous agent interactions
+    ├── daemon.log          # Log for TCP daemon interactions
+    └── session.log         # Log for CLI tool interactions
+```
+
+This single-pass agent forms the foundation for more complex autonomous behaviors in subsequent steps.
+```
