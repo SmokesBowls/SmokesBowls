@@ -140,3 +140,27 @@ ZW-ANIMATION:
 
 NOTE: This scene now includes ZW-STAGE tracks for PROPERTY_ANIM, MATERIAL_OVERRIDE, and SHADER_SWITCH, alongside other features.
 ///
+
+// --- Test Case for ZW-MESH (Phase 8.5) ---
+ZW-MESH:
+  NAME: Spirit_Tree_Test
+  TYPE: ico_sphere // This should be interpreted as the base primitive by zw_mesh.create_base_mesh
+  PARAMS:
+    SUBDIVISIONS: 3
+    RADIUS: 1.5
+  DEFORMATIONS:
+    - TYPE: twist
+      AXIS: Z
+      ANGLE: 60 // Assumed to be degrees, zw_mesh.py's apply_deformations handles math.radians()
+    - TYPE: displace
+      TEXTURE: noise // zw_mesh.py's add_displace_deform handles this, might map to 'CLOUDS' or similar
+      STRENGTH: 0.4
+  MATERIAL:
+    NAME: SpiritGlowMaterial // Explicit material name
+    BASE_COLOR: "#7FFFD4"    // Aquamarine
+    EMISSION: 1.2            // Emission strength
+    EMISSION_COLOR: "#9FFFFF" // Pale cyan/turquoise for emission
+  LOCATION: (0.0, 0.0, 0.0)
+  ROTATION: "(0.0, 0.0, 0.0)" // Using string tuple for consistency with how adapter might handle it
+  SCALE: "(1.0, 1.0, 1.0)"  // Using string tuple
+///

@@ -1204,6 +1204,108 @@ ZW-LIGHT:
 
 This addition allows ZW to define not just the subjects of a scene, but also how they are viewed and illuminated, completing a more comprehensive scene description toolset.
 
+### Phase 6.10: Procedural Meshes with `ZW-MESH` (Foundation)
+
+This phase introduces the `ZW-MESH:` block, allowing for the definition of 3D meshes through a procedural pipeline. This involves specifying a base primitive, a series of deformations, and material properties, all processed by a dedicated Python module (`zw_mesh.py`) called by the main `blender_adapter.py`.
+
+#### ZW Syntax for Procedural Meshes (`ZW-MESH`):
+
+A `ZW-MESH:` block defines a complete procedural mesh object. The `blender_adapter.py` expects the ZW parser to provide the attributes for a `ZW-MESH` as a dictionary value if `ZW-MESH` is the key.
+
+```zw
+ZW-MESH: // This key's value should be the dictionary of attributes below
+  NAME: <UniqueObjectNameString>
+  TYPE: <BasePrimitiveTypeString> // e.g., "ico_sphere", "cylinder", "grid", "cube", "cone"
+                                  // (Note: `zw_mesh.py` might also check for a 'BASE' key)
+  PARAMS:                         // Dictionary of parameters for the base primitive
+    SUBDIVISIONS: <Integer>       // (for ico_sphere)
+    RADIUS: <Float>               // (for ico_sphere, cylinder)
+    VERTICES: <Integer>           // (for cylinder, cone)
+    DEPTH: <Float>                // (for cylinder, cone)
+    X_SUBDIVISIONS: <Integer>     // (for grid)
+    Y_SUBDIVISIONS: <Integer>     // (for grid)
+    SIZE: <Float>                 // (for grid, cube)
+    // ... other primitive-specific params ...
+  DEFORMATIONS:                   // Optional list of deformation operations to apply sequentially
+    - TYPE: <DeformationTypeString> // e.g., "twist", "displace", "skin"
+      // ... parameters specific to this deformation type ...
+      AXIS: <X|Y|Z>
+      ANGLE: <FloatInDegrees>     // (for twist)
+      TEXTURE: <TextureTypeString>  // (e.g., "noise" for displace, maps to Blender types like "CLOUDS")
+      STRENGTH: <Float>           // (for displace)
+      THICKNESS: <Float>          // (for skin)
+    // ... more deformations ...
+  MATERIAL:                       // Optional dictionary defining the object's material
+    NAME: <MaterialNameString>    // Optional: name for the material in Blender
+    BASE_COLOR: "<#RRGGBB>" | "(R,G,B,A)"
+    EMISSION: <Float>             // Emission strength
+    EMISSION_COLOR: "<#RRGGBB>" | "(R,G,B,A)" // Optional: color for emission
+    // ... other BSDF params from Phase 6.3 could be nested here if `zw_mesh.py` supports them ...
+  LOCATION: "(x, y, z)"           // Optional: World-space location
+  ROTATION: "(rx, ry, rz)"        // Optional: Euler rotation in degrees
+  SCALE: "(sx, sy, sz)"           // Optional: Scale factors
+  COLLECTION: <CollectionNameString> // Optional: Assign to a specific collection
+///
+```
+
+-   **`NAME`**: The name for the final Blender object.
+-   **`TYPE`** (or **`BASE`**): Specifies the base primitive mesh (e.g., "ico_sphere", "cylinder", "grid", "cube", "cone"). The `zw_mesh.py` module's `create_base_mesh` function handles this.
+-   **`PARAMS`**: A dictionary of parameters for the chosen base primitive (e.g., `RADIUS`, `SUBDIVISIONS`, `DEPTH`, `VERTICES`, `SIZE`).
+-   **`DEFORMATIONS`** (Optional): A list of dictionaries, each defining a deformation to be applied sequentially.
+    -   `TYPE`: The kind of deformation (e.g., "twist", "displace", "skin" - initial supported types in `zw_mesh.py`).
+    -   Other keys within each deformation dictionary are parameters for that specific deformation type (e.g., `AXIS`, `ANGLE` for twist; `TEXTURE`, `STRENGTH` for displace).
+-   **`MATERIAL`** (Optional): A dictionary defining the material properties.
+    -   `NAME` (Optional): Name for the Blender material.
+    -   `BASE_COLOR`: Hex string or tuple string.
+    -   `EMISSION`: Emission strength (float).
+    -   `EMISSION_COLOR` (Optional): Color for emission.
+    -   (Future: Could support a full `BSDF` block here if `zw_mesh.py`'s `apply_material` is expanded).
+-   **`LOCATION`, `ROTATION`, `SCALE`** (Optional): Standard transform attributes. Rotation is in degrees.
+-   **`COLLECTION`** (Optional): Assigns the created mesh object to a specific Blender collection.
+
+#### How it Works in `blender_adapter.py` and `zw_mesh.py`:
+
+-   The `process_zw_structure` function in `blender_adapter.py` now recognizes `ZW-MESH` keys.
+-   It calls `handle_zw_mesh_block(mesh_definition_dict, current_bpy_collection)` which is imported from the new `zw_mcp/zw_mesh.py` module.
+-   The `zw_mesh.handle_zw_mesh_block` function then orchestrates:
+    1.  Calling `zw_mesh.create_base_mesh()` to generate the initial primitive in Blender based on `TYPE` and `PARAMS`.
+    2.  Setting the object's `NAME`, `LOCATION`, `ROTATION`, and `SCALE`.
+    3.  If `DEFORMATIONS` are present, iterating through them and calling `zw_mesh.apply_deformations()` (which in turn calls specific helpers like `add_twist_deform`, `add_displace_deform`, `add_skin_deform` to add and configure Blender modifiers).
+    4.  If `MATERIAL` is defined, calling `zw_mesh.apply_material()` to create/assign a material and set its `BASE_COLOR` and basic `EMISSION` properties on the Principled BSDF node.
+    5.  Linking the final object to the appropriate Blender collection (passed as `current_bpy_collection` or determined by an explicit `COLLECTION` attribute in the `ZW-MESH` block).
+    6.  Includes error handling, creating a fallback "error cube" if the process fails.
+
+#### Example (`Spirit_Tree_Test`):
+
+```zw
+// --- Test Case for ZW-MESH (Phase 8.5 / 6.10) ---
+ZW-MESH:
+  NAME: Spirit_Tree_Test
+  TYPE: ico_sphere // Base primitive
+  PARAMS:
+    SUBDIVISIONS: 3
+    RADIUS: 1.5
+  DEFORMATIONS:
+    - TYPE: twist
+      AXIS: Z
+      ANGLE: 60 // Degrees
+    - TYPE: displace
+      TEXTURE: noise // Maps to a Blender texture like 'CLOUDS'
+      STRENGTH: 0.4
+  MATERIAL:
+    NAME: SpiritGlowMaterial
+    BASE_COLOR: "#7FFFD4"    // Aquamarine
+    EMISSION: 1.2            // Emission strength
+    EMISSION_COLOR: "#9FFFFF" // Pale cyan/turquoise for emission
+  LOCATION: "(0.0, 0.0, 0.0)"
+  ROTATION: "(0.0, 0.0, 0.0)"
+  SCALE: "(1.0, 1.0, 1.0)"
+  COLLECTION: ProceduralObjects
+///
+```
+
+This `ZW-MESH` system forms the foundation for a powerful procedural geometry pipeline driven by ZW, enabling complex shapes and objects to be generated from structured text descriptions. The current implementation in `zw_mesh.py` supports icospheres, cylinders, and grids as base meshes, with scaffolding for twist, displace, and skin deformations, alongside basic material application.
+
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
 

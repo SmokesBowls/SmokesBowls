@@ -27,6 +27,34 @@ except ImportError:
             return {}
         # sys.exit(1) # Or exit if critical
 
+# Try to import handle_zw_mesh_block from zw_mesh (relative, package, or direct)
+ZW_MESH_IMPORTED = False
+HANDLE_ZW_MESH_BLOCK_FUNC = None
+try:
+    from .zw_mesh import handle_zw_mesh_block as imported_handle_zw_mesh_block
+    HANDLE_ZW_MESH_BLOCK_FUNC = imported_handle_zw_mesh_block
+    ZW_MESH_IMPORTED = True
+    print("Successfully imported handle_zw_mesh_block from .zw_mesh (relative).")
+except ImportError:
+    # Fallback if relative import fails
+    try:
+        from zw_mcp.zw_mesh import handle_zw_mesh_block as pkg_imported_handle_zw_mesh_block
+        HANDLE_ZW_MESH_BLOCK_FUNC = pkg_imported_handle_zw_mesh_block
+        ZW_MESH_IMPORTED = True
+        print("Successfully imported handle_zw_mesh_block from zw_mcp.zw_mesh (package).")
+    except ImportError as e_pkg_mesh:
+        print(f"Failed package import of handle_zw_mesh_block from zw_mcp.zw_mesh: {e_pkg_mesh}")
+        try:
+            from zw_mesh import handle_zw_mesh_block as direct_imported_handle_zw_mesh_block
+            HANDLE_ZW_MESH_BLOCK_FUNC = direct_imported_handle_zw_mesh_block
+            ZW_MESH_IMPORTED = True
+            print("Successfully imported handle_zw_mesh_block (direct from script directory - fallback).")
+        except ImportError as e_direct_mesh:
+            print(f"All import attempts for handle_zw_mesh_block failed: {e_direct_mesh}")
+            def HANDLE_ZW_MESH_BLOCK_FUNC(mesh_def_dict, collection_context=None): # Ensure dummy has same signature
+                print("[Critical Error] zw_mesh.handle_zw_mesh_block was not imported. Cannot process ZW-MESH.")
+                return None
+
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")
 
 def safe_eval(str_val, default_val):
@@ -850,6 +878,17 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 handle_zw_stage_block(value)
             else: print(f"    [Warning] Value for 'ZW-STAGE' key is not a dictionary. Value: {value}")
             continue
+        elif key == "ZW-MESH": # Assuming ZW-MESH is a key, and its value is the definition dictionary
+            if isinstance(value, dict):
+                if ZW_MESH_IMPORTED and HANDLE_ZW_MESH_BLOCK_FUNC:
+                    print(f"  Processing ZW-MESH block: {value.get('NAME', 'UnnamedZWMesh')}")
+                    # Pass the current_bpy_collection so zw_mesh.py can link the new object correctly
+                    HANDLE_ZW_MESH_BLOCK_FUNC(value, current_bpy_collection)
+                else:
+                    print("    [Error] ZW-MESH block found, but zw_mesh.handle_zw_mesh_block function was not imported.")
+            else:
+                print(f"    [Warning] Value for 'ZW-MESH' key is not a dictionary. Value: {value}")
+            continue # Added continue to ensure it doesn't fall through to ZW-OBJECT or generic dict processing
         if key.upper() == "ZW-OBJECT":
             if isinstance(value, dict): obj_attributes_for_current_zw_object = value
             elif isinstance(value, str): obj_attributes_for_current_zw_object = {"TYPE": value}
