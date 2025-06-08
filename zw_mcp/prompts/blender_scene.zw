@@ -6,97 +6,120 @@ ZW-SCENE_SETUP:
   ACTIVE_COLLECTION: SceneRoot
 ///
 
-// --- Define entities for ZW-STAGE testing (if not already present) ---
+// --- Define materials that can be used by MATERIAL_OVERRIDE ---
+ZW-OBJECT: // Dummy object to define a material
+  TYPE: Cube
+  NAME: MaterialHolder_RedGlow
+  LOCATION: (-100, -100, -100) // Hidden away
+  MATERIAL: RedGlowMat
+  COLOR: "#FF0000"
+  BSDF:
+    EMISSION_STRENGTH: 5.0
+    EMISSION_COLOR: "#FF0000"
+  COLLECTION: MaterialDefinitions // Keep material definition objects separate
+///
+
+ZW-OBJECT: // Dummy object for another material
+  TYPE: Cube
+  NAME: MaterialHolder_BlueMatte
+  LOCATION: (-101, -100, -100)
+  MATERIAL: BlueMatteMat
+  COLOR: "#0000FF"
+  BSDF:
+    ROUGHNESS: 0.9
+  COLLECTION: MaterialDefinitions
+///
+
+// --- Define target object for these new tracks ---
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: StageFXSphere
+  LOCATION: (-12, 0, 1)
+  MATERIAL: BlueMatteMat // Initial material
+  COLLECTION: StagingFX
+///
+
+ZW-LIGHT:
+  NAME: StageFXLight
+  TYPE: POINT
+  LOCATION: (-12, 2, 3)
+  ENERGY: 500
+  COLOR: "#FFFFFF"
+  COLLECTION: StagingFX
+///
+
+// --- ZW-STAGE block demonstrating new track types (Phase 8.1) ---
+ZW-STAGE:
+  NAME: "AdvancedSceneEvents"
+  TRACKS:
+    // 1. PROPERTY_ANIM example: Animate light energy
+    - TYPE: PROPERTY_ANIM
+      TARGET: "StageFXLight"
+      PROPERTY_PATH: "data.energy"
+      INTERPOLATION: BEZIER
+      KEYFRAMES:
+        - FRAME: 1
+          VALUE: 100.0
+        - FRAME: 50
+          VALUE: 1000.0
+        - FRAME: 100
+          VALUE: 100.0
+
+    // 2. MATERIAL_OVERRIDE example
+    - TYPE: MATERIAL_OVERRIDE
+      TARGET: "StageFXSphere"
+      MATERIAL_NAME: "RedGlowMat"
+      START_FRAME: 20
+      END_FRAME: 80                   // Frame at which original material is restored
+      RESTORE_ON_END: "true"
+
+    // 3. SHADER_SWITCH example: Change roughness on the original material
+    - TYPE: SHADER_SWITCH
+      TARGET: "StageFXSphere"
+      MATERIAL_NAME: "BlueMatteMat"
+      TARGET_NODE: "Principled BSDF"
+      INPUT_NAME: "Roughness"
+      NEW_VALUE: 0.1
+      FRAME: 40
+
+    // Example of SHADER_SWITCH for a color input
+    - TYPE: SHADER_SWITCH
+      TARGET: "StageFXSphere"
+      MATERIAL_NAME: "BlueMatteMat"
+      TARGET_NODE: "Principled BSDF"
+      INPUT_NAME: "Base Color"
+      NEW_VALUE: "(1.0, 0.0, 0.0, 1.0)"
+      FRAME: 60
+///
+
+// --- Existing Content (for context and regression testing, slightly adjusted locations) ---
+
 ZW-OBJECT:
   TYPE: Cube
-  NAME: StageTargetCube
+  NAME: CentralAltar // Target for camera tracking
   LOCATION: (0,0,1)
   SCALE: (1,1,0.2)
   MATERIAL: StoneAltar
   COLOR: "(0.4,0.4,0.45,1)"
-  COLLECTION: StagingArea
+  COLLECTION: Scenery
 ///
-
 ZW-CAMERA:
-  NAME: StageCam_Overview
-  LOCATION: (0, -10, 5)
-  ROTATION: "(60,0,0)" // Degrees
+  NAME: MainShotCam
+  LOCATION: (0, -8, 3)
+  ROTATION: "(70, 0, 0)"
   FOV: 50
-  COLLECTION: StagingArea
+  CLIP_START: 0.1
+  CLIP_END: 200.0
+  TRACK_TARGET: CentralAltar
+  COLLECTION: CamerasAndLights
 ///
-
-ZW-CAMERA:
-  NAME: StageCam_CloseUp
-  LOCATION: (0, -3, 1.5)
-  ROTATION: "(80,0,0)" // Degrees
-  FOV: 80
-  TRACK_TARGET: StageTargetCube
-  COLLECTION: StagingArea
-///
-
-ZW-LIGHT:
-  NAME: StageSpotLight
-  TYPE: SPOT
-  LOCATION: (3, -5, 4)
-  ROTATION: "(60,0,-45)" // Degrees
-  ENERGY: 1000
-  COLOR: "#FFFFDD"
-  SIZE: 45 // Spot angle in degrees
-  COLLECTION: StagingArea
-///
-
-// --- Test Case for ZW-STAGE (Phase 8.0) ---
-ZW-STAGE:
-  NAME: "MyFirstSequence"
-  TRACKS:
-    - TYPE: CAMERA
-      TARGET: "StageCam_Overview"
-      START: 1
-      // END: 50
-
-    - TYPE: VISIBILITY
-      TARGET: "StageTargetCube"
-      START: 1
-      STATE: "SHOW"
-
-    - TYPE: LIGHT_INTENSITY
-      TARGET: "StageSpotLight"
-      START: 1
-      VALUE: 500
-      // END: 50
-      // END_VALUE: 2000
-
-    - TYPE: VISIBILITY
-      TARGET: "StageTargetCube"
-      START: 25
-      STATE: "HIDE"
-
-    - TYPE: CAMERA
-      TARGET: "StageCam_CloseUp"
-      START: 51
-
-    - TYPE: LIGHT_INTENSITY
-      TARGET: "StageSpotLight"
-      START: 51
-      VALUE: 2500
-      END: 100
-      END_VALUE: 100
-
-    - TYPE: VISIBILITY
-      TARGET: "StageTargetCube"
-      START: 75
-      STATE: "SHOW"
-///
-
-
-// --- Existing Content (for context and regression testing) ---
 
 ZW-OBJECT:
   TYPE: Cube
   NAME: AnimCube_ZRotate_Linear
-  LOCATION: (-10, 0, 1)
+  LOCATION: (-10, 5, 1) // Adjusted Y
   MATERIAL: AnimMat_Rotation
-  COLOR: "#B0E0E6" // PowderBlue
+  COLOR: "#B0E0E6"
   COLLECTION: AnimationSuite_Tests
 ///
 ZW-ANIMATION:
@@ -115,5 +138,5 @@ ZW-ANIMATION:
       VALUE: 360
 ///
 
-NOTE: This scene now includes ZW-STAGE block with CAMERA, VISIBILITY, and LIGHT_INTENSITY tracks.
+NOTE: This scene now includes ZW-STAGE tracks for PROPERTY_ANIM, MATERIAL_OVERRIDE, and SHADER_SWITCH, alongside other features.
 ///

@@ -812,6 +812,103 @@ The `blender_adapter.py` processes these `ZW-FUNCTION` blocks by adding and conf
         ///
         ```
 
+4.  **`TYPE: PROPERTY_ANIM`**
+    -   **Purpose:** Provides a generic way to animate almost any animatable property of an object or its data over time using keyframes. This is similar to `ZW-ANIMATION` but within the `ZW-STAGE` context.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The name of the ZW-OBJECT to animate.
+        -   `PROPERTY_PATH: "<RNA_Property>"`: The Blender RNA data path to the property (e.g., "location", "scale[0]", "modifiers['MyBevel'].width", "material_slots[0].material.node_tree.nodes['Principled BSDF'].inputs['Roughness'].default_value").
+        -   `INDEX: <OptionalInteger>`: Specify for a single component of a vector/array property if `VALUE` is scalar.
+        -   `UNIT: degrees` (Optional): If `PROPERTY_PATH` is rotational and `VALUE`s are in degrees.
+        -   `INTERPOLATION: <BEZIER|LINEAR|CONSTANT>` (Optional): Default is "BEZIER".
+        -   `KEYFRAMES: [{FRAME: <F>, VALUE: <V>}, ...]` : List of keyframe definitions. `VALUE` can be scalar or tuple string.
+    -   **Behavior:** Creates F-Curves and keyframes for the specified property, similar to `ZW-ANIMATION` processing.
+    -   **Example:**
+        ```zw
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: PROPERTY_ANIM
+              TARGET: "StageFXLight"       // A ZW-LIGHT or ZW-OBJECT
+              PROPERTY_PATH: "data.energy" // Animating light energy
+              INTERPOLATION: BEZIER
+              KEYFRAMES:
+                - FRAME: 100
+                  VALUE: 0.0
+                - FRAME: 120
+                  VALUE: 800.0
+                - FRAME: 140
+                  VALUE: 0.0
+        ///
+        ```
+
+5.  **`TYPE: MATERIAL_OVERRIDE`**
+    -   **Purpose:** Temporarily changes the material assigned to an object's material slot for a specified duration.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The ZW-OBJECT whose material will be changed.
+        -   `MATERIAL_NAME: <MaterialToAssignString>`: The name of the Blender material to assign. The adapter will use an existing material or create a new one with this name (and default node setup if new).
+        -   `START_FRAME: <Integer>`: Frame at which the new material is applied.
+        -   `END_FRAME: <OptionalInteger>`: Frame at which to restore the original material.
+        -   `RESTORE_ON_END: "true" | "false"` (Optional): Boolean (as string). If "true" and `END_FRAME` is specified, the object's material at `START_FRAME - 1` is restored at `END_FRAME`. Defaults to "false" or no restoration if `END_FRAME` is missing.
+        -   `SLOT_INDEX: <OptionalInteger>`: The material slot index to target. Defaults to 0.
+    -   **Behavior:** Keyframes the `material_slots[<index>].material` property with `CONSTANT` interpolation.
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          NAME: MyCharacter
+          MATERIAL: DefaultSkinMat // Initial material
+        ///
+        ZW-MATERIAL: // Define the override material (or ensure it exists)
+          NAME: EvilCorruptSkinMat
+          COLOR: "#8B0000" // Dark Red
+          BSDF:
+            ROUGHNESS: 0.8
+        ///
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: MATERIAL_OVERRIDE
+              TARGET: "MyCharacter"
+              MATERIAL_NAME: "EvilCorruptSkinMat"
+              START_FRAME: 50
+              END_FRAME: 100
+              RESTORE_ON_END: "true"
+        ///
+        ```
+
+6.  **`TYPE: SHADER_SWITCH`**
+    -   **Purpose:** Changes and keyframes the value of a specific input socket on a shader node within an object's material.
+    -   **Specific Parameters:**
+        -   `TARGET: <TargetObjectNameString>`: The ZW-OBJECT whose material will be affected.
+        -   `MATERIAL_NAME: <OptionalMaterialNameString>`: Name of the material to modify. If omitted, uses the object's active material or first material slot.
+        -   `TARGET_NODE: <ShaderNodeNameString>`: The name of the shader node (e.g., "Principled BSDF", "MixRGB_Glow").
+        -   `INPUT_NAME: <SocketNameString>`: The name of the input socket on the `TARGET_NODE` (e.g., "Roughness", "Alpha", "Base Color", "Fac").
+        -   `NEW_VALUE: <ScalarOrTupleString>`: The new value for the socket. Parsed based on socket type (float, color tuple string, vector tuple string, boolean string).
+        -   `FRAME: <Integer>`: The frame at which to set and keyframe this new value.
+    -   **Behavior:** Locates the specified shader node input and keyframes its `default_value` with `CONSTANT` interpolation at the given `FRAME`.
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          NAME: MagicOrb
+          MATERIAL: OrbMaterial
+          COLOR: "#0000FF" // Blue
+          BSDF: {ROUGHNESS: 0.1, EMISSION_STRENGTH: 1.0, EMISSION_COLOR: "#0000FF"}
+        ///
+        ZW-STAGE:
+          TRACKS:
+            - TYPE: SHADER_SWITCH
+              TARGET: "MagicOrb"
+              // MATERIAL_NAME: "OrbMaterial" // Optional if it's the active/first
+              TARGET_NODE: "Principled BSDF"
+              INPUT_NAME: "Emission Strength" // Blender socket name
+              NEW_VALUE: 10.0
+              FRAME: 75
+            - TYPE: SHADER_SWITCH
+              TARGET: "MagicOrb"
+              TARGET_NODE: "Principled BSDF"
+              INPUT_NAME: "Base Color"
+              NEW_VALUE: "(1.0, 0.0, 0.0, 1.0)" // Switch to Red
+              FRAME: 75
+        ///
+        ```
+
 #### How it Works in `blender_adapter.py`:
 
 -   The `process_zw_structure` function now recognizes `ZW-FUNCTION` keys.
