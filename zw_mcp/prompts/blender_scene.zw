@@ -1,0 +1,35 @@
+ZW-SCENE_SETUP:
+  BACKGROUND_COLOR: DarkBlue
+  LIGHTING: StandardStudio
+///
+
+ZW-OBJECT: Sphere
+  NAME: CentralStar
+  SCALE: 2.0
+  MATERIAL: EmissiveGold
+///
+
+ZW-OBJECT: Cube
+  NAME: SupportBlock1
+  LOCATION: X=5, Y=0, Z=0
+  ROTATION: Z=45
+  MATERIAL: MatteGray
+///
+
+ZW-OBJECT: Plane
+  NAME: GroundPlane
+  SCALE: X=20, Y=20, Z=1
+  MATERIAL: TexturedRock
+///
+
+ZW-NESTED-DETAILS:
+  PARENT: SupportBlock1
+  ZW-OBJECT: Cone
+    NAME: SpireTop
+    LOCATION: X=0, Y=0, Z=1.5
+    SCALE: X=0.5, Y=0.5, Z=1.0
+    MATERIAL: PolishedSilver
+///
+
+NOTE: This is a more complex scene example. The blender_adapter will initially only handle ZW-OBJECT types directly under the root or a ZW-NESTED-DETAILS (though the current adapter only processes ZW-OBJECT at any level).
+///

@@ -499,3 +499,95 @@ zw_mcp/
 
 This multi-agent framework allows for the creation of complex, collaborative narrative simulations or problem-solving dialogues between different AI personas.
 ```
+
+---
+## Phase 6: Blender Adapter
+
+This phase bridges the ZW protocol with 3D content creation by introducing an adapter script that runs within Blender. It allows ZW-formatted instructions to be translated into Blender Python (`bpy`) commands, effectively enabling ZW agents or scripts to "speak objects into existence."
+
+### Core Component: `zw_mcp/blender_adapter.py`
+
+-   **Purpose:** This Python script is designed to be executed by Blender's internal Python interpreter. It reads a specified ZW file, parses it using the existing `zw_mcp.zw_parser` module, and then processes the parsed structure to create 3D objects in the current Blender scene.
+-   **Functionality:**
+    -   **ZW Input:** Reads a designated `.zw` file (e.g., `zw_mcp/prompts/blender_scene.zw`) containing scene descriptions.
+    -   **Parsing:** Utilizes `zw_parser.parse_zw()` to convert the ZW text into a Python dictionary.
+    -   **ZW-to-bpy Mapping:** Implements a function (`handle_zw_object_creation`) that maps specific ZW commands (primarily `ZW-OBJECT: <Type>`) to Blender object creation operations (`bpy.ops.mesh.primitive_..._add()`).
+    -   **Recursive Processing:** Traverses the parsed ZW dictionary, allowing for nested structures (though initial object creation is typically based on direct `ZW-OBJECT` values).
+-   **Initial Supported Objects:**
+    -   Cube (`ZW-OBJECT: Cube`)
+    -   Sphere (`ZW-OBJECT: Sphere`)
+    -   Plane (`ZW-OBJECT: Plane`)
+    -   Cone (`ZW-OBJECT: Cone`)
+    *(The adapter can be extended to support more object types, properties like location, scale, rotation, materials, and more complex ZW command structures).*
+
+### How to Use the Blender Adapter:
+
+1.  **Prerequisites:**
+    -   Blender installed.
+    -   The ZW MCP project files structured as per the repository.
+
+2.  **Prepare ZW Input:**
+    -   Create or edit a `.zw` file with scene instructions. An example is provided at `zw_mcp/prompts/blender_scene.zw`.
+        ```zw
+        // Example from blender_scene.zw
+        ZW-OBJECT: Sphere
+        ///
+        ZW-OBJECT: Cube
+        ///
+        ```
+
+3.  **Run from Command Line (Headless/Background):**
+    Open your terminal or command prompt, navigate to the root directory of the ZW MCP project, and execute:
+    ```bash
+    blender --background --python zw_mcp/blender_adapter.py
+    ```
+    -   `--background`: Runs Blender without opening the UI (headless).
+    -   `--python <script_path>`: Tells Blender to execute the specified Python script.
+    -   Objects defined in your `blender_scene.zw` will be created in a new Blender scene. To save the result, you would typically add `bpy.ops.wm.save_as_mainfile(filepath="path/to/your_scene.blend")` to the end of `blender_adapter.py`.
+
+4.  **Run from Blender's Scripting Tab (Interactive):**
+    -   Open Blender.
+    -   Go to the "Scripting" tab.
+    -   Click "Open" and navigate to `zw_mcp/blender_adapter.py` to load it into the text editor.
+    -   Click the "Run Script" button (looks like a play icon).
+    -   Objects will be created in your currently open Blender scene. This is useful for development and debugging.
+
+### Important Notes for `blender_adapter.py`:
+
+-   **Python Environment:** The script runs within Blender's own Python environment, which includes the `bpy` module.
+-   **Importing `zw_parser`:** The `blender_adapter.py` includes logic to help Blender's Python interpreter find the `zw_parser.py` module located within the `zw_mcp` directory. This usually works best if Blender is launched from the root of the project directory.
+-   **Error Handling & Logging:** The adapter includes print statements for progress and basic error handling. When run in background mode, Blender's console output will show these messages.
+
+### Updated Directory Structure (Illustrative for Phase 6):
+
+The `blender_adapter.py` is added to the `zw_mcp` directory, and a specific prompt file for it is in `prompts`.
+
+```
+zw_mcp/
+├── blender_adapter.py      # NEW: Script to run within Blender
+├── agent_profiles.json
+├── agents/
+│   ├── narrator_config.json
+│   └── historian_config.json
+├── agent_runtime/
+│   # ... (per-agent logs/memory)
+├── zw_agent_hub.py
+├── ollama_agent.py
+├── agent_config.json
+├── zw_mcp_daemon.py
+├── client_example.py
+├── zw_mcp_server.py
+├── ollama_handler.py
+├── zw_parser.py
+├── test_zw_parser.py
+├── prompts/
+│   ├── blender_scene.zw    # NEW: Example ZW input for Blender
+│   ├── example.zw
+│   ├── master_seed.zw
+│   ├── narrator_seed.zw
+│   └── historian_seed.zw
+# ... (other directories like responses/, logs/)
+```
+
+This adapter represents a significant step towards using ZW as a descriptive language for generating and manipulating 3D content, opening possibilities for agent-driven world-building or procedural asset creation.
+```
