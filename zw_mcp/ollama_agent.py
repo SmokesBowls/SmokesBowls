@@ -2,10 +2,10 @@
 import socket
 import json
 from pathlib import Path
-from datetime import datetime # Added for logging timestamp
+from datetime import datetime # Added for logging timestamp consistency
 
 CONFIG_PATH = Path("zw_mcp/agent_config.json")
-BUFFER_SIZE = 4096 # Consistent with client_example and daemon
+BUFFER_SIZE = 4096 # Consistent with other scripts
 
 def load_config():
     try:
@@ -21,29 +21,28 @@ def load_config():
         print(f"[!] Error loading agent configuration: {e}")
         raise
 
-def load_prompt(path_str: str) -> str:
+def load_initial_prompt(path_str: str) -> str: # Renamed for clarity
     prompt_path = Path(path_str)
     try:
         with open(prompt_path, "r", encoding="utf-8") as f:
             text = f.read().strip()
-            if not text.endswith("///"):
-                text += "\n///"
-            return text
+            # Ensure initial prompt also ends with /// for consistency with daemon expectation
+            return text if text.endswith("///") else text + "\n///"
     except FileNotFoundError:
-        print(f"[!] Error: Prompt file not found at '{prompt_path}'")
+        print(f"[!] Error: Initial prompt file not found at '{prompt_path}'")
         raise
     except Exception as e:
-        print(f"[!] Error loading prompt file '{prompt_path}': {e}")
+        print(f"[!] Error loading initial prompt file '{prompt_path}': {e}")
         raise
 
 def send_to_daemon(host: str, port: int, prompt: str) -> str:
-    print(f"[*] Connecting to ZW MCP Daemon at {host}:{port}...")
+    # print(f"[*] Connecting to ZW MCP Daemon at {host}:{port}...") # Reduced verbosity for loops
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((host, port))
-            print(f"[*] Connected. Sending prompt...")
+            # print(f"[*] Connected. Sending prompt for current round...") # Reduced verbosity
             s.sendall(prompt.encode("utf-8"))
-            s.shutdown(socket.SHUT_WR) # Signal that sending is done
+            s.shutdown(socket.SHUT_WR)
 
             response_parts = []
             while True:
@@ -60,55 +59,128 @@ def send_to_daemon(host: str, port: int, prompt: str) -> str:
                     break
 
             if not response_parts:
-                print("[!] No response received from server.")
+                # print("[!] No response received from server for current round.") # Daemon should ideally always respond
                 return "ERROR: No response received from server"
-
             return "".join(response_parts)
 
     except socket.error as e:
-        print(f"[!] Socket error while communicating with daemon: {e}")
-        return f"ERROR: Socket error communicating with daemon - {e}"
+        print(f"[!] Socket error during round: {e}")
+        return f"ERROR: Socket error during round - {e}"
     except Exception as e:
-        print(f"[!] An unexpected error occurred while communicating with daemon: {e}")
-        return f"ERROR: Unexpected error communicating with daemon - {e}"
+        print(f"[!] Unexpected error during round: {e}")
+        return f"ERROR: Unexpected error during round - {e}"
 
-def log_interaction(log_path_str: str, prompt: str, response: str):
+def log_round_interaction(log_path_str: str, round_num: int, prompt: str, response: str): # Renamed for clarity
     if not log_path_str:
-        print("[*] Log path not configured. Skipping logging.")
+        # print("[*] Log path not configured. Skipping round logging.") # Can be noisy in loops
         return
 
     log_file = Path(log_path_str)
-    log_file.parent.mkdir(parents=True, exist_ok=True) # Ensure log directory exists
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"--- Prompt [{timestamp}] ---\n{prompt}\n"
-    log_entry += f"--- Response [{timestamp}] ---\n{response}\n---\n"
+    log_entry = f"--- ZW Agent Round {round_num} [{timestamp}] ---\n"
+    log_entry += f">>> Prompt:\n{prompt}\n"
+    log_entry += f"<<< Response:\n{response}\n---\n"
 
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(log_entry)
-        print(f"[*] Interaction logged to '{log_file.resolve()}'")
     except Exception as e:
-        print(f"[!] Error writing to log file '{log_file}': {e}")
+        print(f"[!] Error writing to round log file '{log_file}': {e}")
+
+def append_to_memory(memory_path_str: str, round_num: int, prompt: str, response: str): # Renamed for clarity
+    if not memory_path_str:
+        print("[!] Memory path not configured. Skipping memory append.")
+        return
+
+    memory_file = Path(memory_path_str)
+    memory_file.parent.mkdir(parents=True, exist_ok=True)
+
+    current_interaction = {"round": round_num, "prompt": prompt, "response": response}
+
+    memory_history = []
+    if memory_file.exists() and memory_file.stat().st_size > 0: # Check if file exists and is not empty
+        try:
+            with open(memory_file, "r", encoding="utf-8") as f:
+                memory_history = json.load(f)
+            if not isinstance(memory_history, list): # Ensure it's a list
+                print(f"[!] Warning: Memory file '{memory_file}' did not contain a list. Starting new memory.")
+                memory_history = []
+        except json.JSONDecodeError:
+            print(f"[!] Warning: Could not decode JSON from memory file '{memory_file}'. Starting new memory.")
+            memory_history = []
+        except Exception as e:
+            print(f"[!] Error reading memory file '{memory_file}': {e}. Starting new memory.")
+            memory_history = []
+
+    memory_history.append(current_interaction)
+
+    try:
+        with open(memory_file, "w", encoding="utf-8") as f:
+            json.dump(memory_history, f, indent=2)
+        # print(f"[*] Round {round_num} interaction saved to memory: '{memory_file.resolve()}'") # Can be noisy
+    except Exception as e:
+        print(f"[!] Error writing to memory file '{memory_file}': {e}")
 
 def main():
     try:
         config = load_config()
-        prompt_text = load_prompt(config["prompt_path"])
+        current_prompt = load_initial_prompt(config["prompt_path"])
     except Exception:
-        # Errors already printed by helper functions
-        print("[!] Agent cannot continue due to configuration or prompt loading errors.")
+        print("[!] Agent cannot continue due to configuration or initial prompt loading errors.")
         return
 
-    response_text = send_to_daemon(config["host"], config["port"], prompt_text)
+    host = config["host"]
+    port = config["port"]
+    max_rounds = config.get("max_rounds", 1) # Default to 1 if not specified
+    stop_keywords = config.get("stop_keywords", [])
+    log_path = config.get("log_path")
+    memory_enabled = config.get("memory_enabled", False)
+    memory_path = config.get("memory_path")
+    prepend_response = config.get("prepend_previous_response", False)
 
-    print("\n🧠 ZW Agent Response:\n")
-    print(response_text)
+    for round_num in range(1, max_rounds + 1):
+        print(f"\n🔁 Round {round_num} of {max_rounds}")
+        print(f"[*] Sending prompt for round {round_num}...")
+        # print(f"Current prompt to send:\n{current_prompt}") # For debugging
 
-    if config.get("log_path"):
-        log_interaction(config["log_path"], prompt_text, response_text)
-    else:
-        print("[*] Logging skipped as 'log_path' not in config.")
+        response = send_to_daemon(host, port, current_prompt)
+
+        print(f"\n🧠 Response (Round {round_num}):\n{response}")
+
+        if log_path:
+            log_round_interaction(log_path, round_num, current_prompt, response)
+
+        if memory_enabled and memory_path:
+            append_to_memory(memory_path, round_num, current_prompt, response)
+        elif memory_enabled and not memory_path:
+            print("[!] Memory is enabled but no 'memory_path' is configured. Cannot save to memory.")
+
+
+        if any(stop_word in response for stop_word in stop_keywords):
+            print(f"\n🛑 Stop keyword detected in response (Round {round_num}). Ending agent loop.")
+            break
+
+        if round_num == max_rounds:
+            print("\n🏁 Max rounds reached. Ending agent loop.")
+            break
+
+        if prepend_response:
+            current_prompt = response.strip()
+            if not current_prompt.endswith("///"):
+                 current_prompt += "\n///"
+        else:
+            # If not prepending, how should the next prompt be formed?
+            # For now, let's assume if not prepending, it reuses the *initial* prompt.
+            # This might need further clarification based on desired behavior.
+            # Or, if prepend_previous_response is false, maybe the loop should not modify the prompt at all,
+            # and send the same initial prompt every time?
+            # The user's code for this `else` was `prompt = response` which is same as `prepend_previous_response=True`
+            # I will clarify this in the README. For now, if not prepending, it will send the *original* initial prompt.
+            print("[*] Prepending response is disabled. Reusing initial prompt for next round (if any).")
+            current_prompt = load_initial_prompt(config["prompt_path"])
+
 
 if __name__ == "__main__":
     main()

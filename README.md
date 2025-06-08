@@ -173,43 +173,54 @@ Note: The `responses/` directory is primarily used by the CLI tool (`zw_mcp_serv
 
 ---
 
-## Phase 2.5: ZW Autonomous Agent (Step 1: Single Pass)
+## Phase 2.5: ZW Autonomous Agent (Step 2: Looping Agent with Memory)
 
-This phase introduces an autonomous agent capable of interacting with the ZW MCP Daemon based on a configuration file. This first step implements a single-pass (one prompt, one response) version of the agent.
+This phase enhances the autonomous agent with conversational looping, response chaining, stop-word detection, and persistent memory.
 
-### New Files for Agent (Step 1)
+### Agent Files & Configuration
 
 - **`zw_mcp/agent_config.json`**:
     - A JSON configuration file that controls the agent's behavior.
-    - **Example Content:**
+    - **Example Content (Updated for Step 2):**
       ```json
       {
         "prompt_path": "zw_mcp/prompts/example.zw",
         "host": "127.0.0.1",
         "port": 7421,
-        "max_rounds": 3,
+        "max_rounds": 5,
         "stop_keywords": ["END_SCENE", "///"],
         "log_path": "zw_mcp/logs/agent.log",
-        "memory_enabled": false
+        "memory_enabled": true,
+        "memory_path": "zw_mcp/logs/memory.json",
+        "prepend_previous_response": true
       }
       ```
-    - Key settings for Step 1:
-        - `prompt_path`: Path to the initial ZW prompt file.
+    - Key settings for Step 2:
+        - `prompt_path`: Path to the **initial** ZW prompt file for the first round.
         - `host`, `port`: Network details for the ZW MCP Daemon.
-        - `log_path`: File path for logging agent interactions.
-    - `max_rounds`, `stop_keywords`, `memory_enabled` are placeholders for future agent enhancements.
+        - `max_rounds`: Maximum number of conversational rounds the agent will perform.
+        - `stop_keywords`: A list of strings. If any of these are found in Ollama's response, the agent will stop looping.
+        - `log_path`: File path for logging each round's prompt and response (e.g., `zw_mcp/logs/agent.log`).
+        - `memory_enabled`: If `true`, the agent saves the prompt and response of each round to a JSON list in `memory_path`.
+        - `memory_path`: Path to the JSON file where conversational memory is stored (e.g., `zw_mcp/logs/memory.json`).
+        - `prepend_previous_response`: If `true`, the response from the previous round becomes the prompt for the next round (with `///` appended). If `false`, the agent reuses the original `prompt_path` content for each round.
 
-- **`zw_mcp/ollama_agent.py` (Single-Pass Version)**:
-    - The initial Python script for the autonomous agent.
+
+- **`zw_mcp/ollama_agent.py` (Looping Version)**:
+    - The Python script for the autonomous agent, now with iterative capabilities.
     - Reads its operational parameters from `zw_mcp/agent_config.json`.
-    - Loads the initial prompt specified in the config.
-    - Connects to the `zw_mcp_daemon.py` and sends the prompt.
-    - Receives the response from the daemon.
-    - Prints the response to the console.
-    - Logs the prompt and response to the file specified by `log_path` in the config (e.g., `zw_mcp/logs/agent.log`).
+    - **Looping Behavior:**
+        - Initiates with the prompt from `prompt_path`.
+        - For up to `max_rounds`:
+            1. Sends the current prompt to `zw_mcp_daemon.py`.
+            2. Receives and prints the response.
+            3. Logs the current round's prompt and response to `log_path`.
+            4. If `memory_enabled` is true, appends the current round's prompt and response to the list in `memory_path`.
+            5. Checks the response for any `stop_keywords`. If found, terminates the loop.
+            6. If `prepend_previous_response` is true, the current response (stripped, with `///` appended) becomes the prompt for the next round. Otherwise, the initial prompt from `prompt_path` is used for the next round.
     - Includes error handling for file operations, configuration loading, and network communication.
 
-### How to Use the Single-Pass Agent
+### How to Use the Looping Agent
 
 1.  **Ensure the ZW MCP Daemon is running:**
     If not already running, start it in a separate terminal:
@@ -217,8 +228,8 @@ This phase introduces an autonomous agent capable of interacting with the ZW MCP
     python3 zw_mcp/zw_mcp_daemon.py
     ```
 
-2.  **Configure the Agent (Optional but Recommended):**
-    Review and edit `zw_mcp/agent_config.json` to ensure `prompt_path`, `host`, `port`, and `log_path` are set as desired. The default `prompt_path` is `zw_mcp/prompts/example.zw`.
+2.  **Configure the Agent:**
+    Review and edit `zw_mcp/agent_config.json` to set parameters like `prompt_path`, `max_rounds`, `stop_keywords`, `memory_enabled`, `memory_path`, etc., according to your needs.
 
 3.  **Run the Autonomous Agent:**
     In another terminal, execute the agent script:
@@ -226,17 +237,19 @@ This phase introduces an autonomous agent capable of interacting with the ZW MCP
     python3 zw_mcp/ollama_agent.py
     ```
 
-4.  **Expected Output:**
-    - The agent will print status messages (connecting, sending prompt).
-    - The final response from Ollama (via the daemon) will be printed to the console.
-    - The interaction (initial prompt and Ollama's response) will be appended to the log file specified in `agent_config.json` (e.g., `zw_mcp/logs/agent.log`).
+4.  **Expected Output & Behavior:**
+    - The agent will print status messages for each round (e.g., "🔁 Round 1 of 5").
+    - The response from Ollama for each round will be printed to the console.
+    - The agent will continue for `max_rounds` unless a stop keyword is detected in a response or an error occurs.
+    - Each round's prompt and response will be appended to the log file specified in `log_path` (e.g., `zw_mcp/logs/agent.log`).
+    - If `memory_enabled` is true, a JSON file (e.g., `zw_mcp/logs/memory.json`) will be created/updated, containing a list of all prompt/response pairs from the session.
 
-### Directory Structure (Updated for Agent - Step 1)
+### Directory Structure (Updated for Looping Agent)
 
 ```
 zw_mcp/
-├── agent_config.json       # NEW: Configuration for the agent
-├── ollama_agent.py         # NEW: Autonomous agent script
+├── agent_config.json       # Configuration for the agent
+├── ollama_agent.py         # Looping autonomous agent script
 ├── zw_mcp_daemon.py        # TCP Daemon server
 ├── client_example.py       # Example TCP client
 ├── zw_mcp_server.py        # CLI tool
@@ -246,10 +259,11 @@ zw_mcp/
 ├── responses/
 │   └──                     # Directory for saved CLI responses
 └── logs/
-    ├── agent.log           # NEW: Log for autonomous agent interactions
+    ├── agent.log           # Log for autonomous agent interactions (rounds)
     ├── daemon.log          # Log for TCP daemon interactions
+    ├── memory.json         # NEW (if memory_enabled): Persistent memory of agent rounds
     └── session.log         # Log for CLI tool interactions
 ```
 
-This single-pass agent forms the foundation for more complex autonomous behaviors in subsequent steps.
+This looping agent with memory provides a more powerful way to conduct extended, evolving interactions with Ollama.
 ```
