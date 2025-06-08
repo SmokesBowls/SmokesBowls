@@ -153,7 +153,6 @@ This networked setup allows various external applications to interface with the 
 
 ### Directory Structure (Updated for Phase 2)
 
-The directory structure remains largely the same, with the addition of the new daemon and client scripts within `zw_mcp/`:
 ```
 zw_mcp/
 ├── zw_mcp_daemon.py        # NEW: TCP Daemon server
@@ -452,7 +451,7 @@ This phase introduces a sophisticated multi-agent orchestration system, enabling
     python3 zw_mcp/zw_agent_hub.py
     ```
 
-4.  **Expected Behavior:**
+4.  **Expected Output & Behavior:**
     -   The hub will load `agent_profiles.json`.
     -   It will start with `master_seed.zw` as the input for the first agent.
     -   Each agent in the profile list will run sequentially.
@@ -1176,3 +1175,5 @@ zw_mcp/
 
 This adapter represents a significant step towards using ZW as a descriptive language for generating and manipulating 3D content, opening possibilities for agent-driven world-building or procedural asset creation.
 ```
+
+[end of README.md]

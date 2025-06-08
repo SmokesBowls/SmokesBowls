@@ -668,12 +668,28 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 print(f"[!] Warning: ZW-DRIVER value is not a dictionary: {value}")
             continue
 
-        elif key.upper() == "ZW-ANIMATION": # Handle ZW-ANIMATION
+        elif key.upper() == "ZW-ANIMATION":
             if isinstance(value, dict):
                 print(f"  Processing ZW-ANIMATION block: {value.get('NAME', 'UnnamedAnimation')}")
                 handle_zw_animation_block(value)
             else:
                 print(f"    [Warning] Value for 'ZW-ANIMATION' key is not a dictionary. Value: {value}")
+            continue
+
+        elif key.upper() == "ZW-CAMERA":
+            if isinstance(value, dict):
+                print(f"  Processing ZW-CAMERA block for: {value.get('NAME', 'UnnamedCamera')}")
+                handle_zw_camera_block(value, current_bpy_collection)
+            else:
+                print(f"    [Warning] Value for 'ZW-CAMERA' key is not a dictionary. Value: {value}")
+            continue
+
+        elif key.upper() == "ZW-LIGHT":
+            if isinstance(value, dict):
+                print(f"  Processing ZW-LIGHT block for: {value.get('NAME', 'UnnamedLight')}")
+                handle_zw_light_block(value, current_bpy_collection)
+            else:
+                print(f"    [Warning] Value for 'ZW-LIGHT' key is not a dictionary. Value: {value}")
             continue
 
 

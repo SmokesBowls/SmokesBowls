@@ -6,20 +6,65 @@ ZW-SCENE_SETUP:
   ACTIVE_COLLECTION: SceneRoot
 ///
 
-// --- Test Cases for ZW-ANIMATION (Phase 6.8) ---
+// --- Test Cases for ZW-CAMERA and ZW-LIGHT (Phase 6.9) ---
 
-ZW-OBJECT:
+ZW-OBJECT: // Target for camera tracking
   TYPE: Cube
-  NAME: AnimCube_ZRotate_Linear
-  LOCATION: (-10, 0, 1)
-  MATERIAL: AnimMat_Rotation
-  COLOR: "#B0E0E6" // PowderBlue
-  COLLECTION: AnimationSuite_Tests
+  NAME: CentralAltar
+  LOCATION: (0,0,1)
+  SCALE: (1,1,0.2)
+  MATERIAL: StoneAltar
+  COLOR: "(0.4,0.4,0.45,1)"
+  COLLECTION: Scenery
 ///
+
+ZW-CAMERA:
+  NAME: MainShotCam
+  LOCATION: (0, -8, 3)
+  ROTATION: "(70, 0, 0)"
+  FOV: 50
+  CLIP_START: 0.1
+  CLIP_END: 200.0
+  TRACK_TARGET: CentralAltar
+  COLLECTION: CamerasAndLights
+///
+
+ZW-CAMERA:
+  NAME: SideViewCam
+  LOCATION: (8, 0, 2)
+  ROTATION: "(90, 0, 90)"
+  FOV: 35
+  COLLECTION: CamerasAndLights
+///
+
+ZW-LIGHT:
+  NAME: KeySunLight
+  LOCATION: (10, -10, 10)
+  ROTATION: "(45, -30, 60)"
+  TYPE: SUN
+  COLOR: "#FFFFE0"
+  ENERGY: 3.5
+  SHADOW: "true"
+  SIZE: 0.1
+  COLLECTION: CamerasAndLights
+///
+
+ZW-LIGHT:
+  NAME: FillPointLight
+  LOCATION: (-5, 5, 4)
+  TYPE: POINT
+  COLOR: "(0.7, 0.7, 1.0, 1.0)"
+  ENERGY: 300
+  SHADOW: "false"
+  SIZE: 0.5
+  COLLECTION: CamerasAndLights
+///
+
+// --- Existing Content (for context and regression testing) ---
 
 ZW-ANIMATION:
   NAME: Spin_AnimCube_Z_Linear
-  TARGET_OBJECT: AnimCube_ZRotate_Linear
+  TARGET_OBJECT: AnimCube_ZRotate_Linear // Defined below
   PROPERTY_PATH: "rotation_euler"
   INDEX: 2
   UNIT: degrees
@@ -32,6 +77,14 @@ ZW-ANIMATION:
     - FRAME: 100
       VALUE: 360
 ///
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: AnimCube_ZRotate_Linear
+  LOCATION: (-10, 0, 1)
+  MATERIAL: AnimMat_Rotation
+  COLOR: "#B0E0E6" // PowderBlue
+  COLLECTION: AnimationSuite_Tests
+///
 
 ZW-OBJECT:
   TYPE: Sphere
@@ -42,7 +95,6 @@ ZW-OBJECT:
   COLOR: "#FFDAB9" // PeachPuff
   COLLECTION: AnimationSuite_Tests
 ///
-
 ZW-ANIMATION:
   NAME: Move_AnimSphere_XYZ_Bezier
   TARGET_OBJECT: AnimSphere_Path_Bezier
@@ -61,123 +113,5 @@ ZW-ANIMATION:
       VALUE: "(-10, 3, 1)"
 ///
 
-ZW-OBJECT:
-  TYPE: Cone
-  NAME: AnimCone_Scale_Constant
-  LOCATION: (-10, -3, 0.5)
-  SCALE: (0.3,0.3,0.8)
-  MATERIAL: AnimMat_Scale
-  COLOR: "#98FB98" // PaleGreen
-  COLLECTION: AnimationSuite_Tests
-///
-
-ZW-ANIMATION:
-  NAME: Pop_AnimCone_Scale_Constant
-  TARGET_OBJECT: AnimCone_Scale_Constant
-  PROPERTY_PATH: "scale"
-  INTERPOLATION: CONSTANT
-  KEYFRAMES:
-    - FRAME: 1
-      VALUE: "(0.3, 0.3, 0.8)"
-    - FRAME: 20
-      VALUE: "(0.6, 0.6, 1.5)"
-    - FRAME: 40
-      VALUE: "(0.3, 0.3, 0.8)"
-    - FRAME: 60
-      VALUE: "(0.7, 0.7, 1.8)"
-    - FRAME: 80
-      VALUE: "(0.1, 0.1, 0.2)"
-    - FRAME: 100
-      VALUE: "(0.3, 0.3, 0.8)"
-///
-
-
-// --- Existing Content (for context and regression testing) ---
-
-ZW-OBJECT: Sphere
-  NAME: DefaultCollectionSphere
-  LOCATION: (0,0,5)
-///
-
-ZW-OBJECT:
-  TYPE: Sphere
-  NAME: ArtifactSphere
-  LOCATION: (-5, -5, 2)
-  SCALE: (0.7, 0.7, 0.7)
-  MATERIAL: GlowingArtifactOrange
-  COLOR: "#FFA500"
-  COLLECTION: SpecialArtifacts
-///
-
-ZW-OBJECT:
-  TYPE: Cylinder
-  NAME: PillarSource
-  LOCATION: (0, 5, 0.5)
-  SCALE: (0.2, 0.2, 1.0)
-  MATERIAL: Stone
-  COLOR: "(0.5,0.5,0.5,1)"
-  SHADING: Smooth
-  COLLECTION: ArchitecturePrimitives
-///
-
-ZW-FUNCTION:
-  NAME: CreatePillarRow
-  TARGET: PillarSource
-  OPERATION: ARRAY
-  PARAMS:
-    COUNT: 5
-    OFFSET: "(2.0, 0, 0)"
-///
-
-ZW-OBJECT:
-  TYPE: Plane
-  NAME: TerrainBase
-  LOCATION: (0, -15, 0)
-  SCALE: (10, 10, 1)
-  MATERIAL: EarthyGround
-  COLOR: "#A0522D"
-  SHADING: Smooth
-  COLLECTION: Landscapes
-///
-
-ZW-FUNCTION:
-  NAME: SculptTerrain
-  TARGET: TerrainBase
-  OPERATION: DISPLACE_NOISE
-  PARAMS:
-    SCALE: 3.0
-    STRENGTH: 0.7
-    AXIS: Z
-///
-
-ZW-OBJECT:
-  TYPE: Cube
-  NAME: DriverSourceCube
-  LOCATION: (0, -10, 1)
-  SCALE: (1,1,1)
-  MATERIAL: DriverSourceMat
-  COLOR: "#00FF00"
-  COLLECTION: DriverExamples
-///
-
-ZW-OBJECT:
-  TYPE: Sphere
-  NAME: DrivenSphere
-  LOCATION: (0, -12, 1)
-  SCALE: (0.5, 0.5, 0.5)
-  MATERIAL: DrivenMat
-  COLOR: "#FF00FF"
-  COLLECTION: DriverExamples
-///
-
-ZW-DRIVER:
-  NAME: LocationX_To_ScaleZ
-  SOURCE_OBJECT: DriverSourceCube
-  SOURCE_PROPERTY: "location.x"
-  TARGET_OBJECT: DrivenSphere
-  TARGET_PROPERTY: "scale[2]"
-  EXPRESSION: "var * 0.5 + 0.1"
-///
-
-NOTE: This scene now includes ZW-ANIMATION blocks for testing keyframe animation, alongside ZW-FUNCTIONs, ZW-DRIVERs, and standard object definitions with materials, parenting, and collections.
+NOTE: This scene now includes ZW-CAMERA and ZW-LIGHT blocks, alongside animations, functions, drivers, and standard object definitions.
 ///
