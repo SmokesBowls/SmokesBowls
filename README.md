@@ -731,6 +731,101 @@ Two primary methods are available for organizing objects into Blender Collection
 
 This collection system provides a powerful way to structure and manage ZW-generated scenes, mirroring common practices in 3D production workflows.
 
+### Phase 6.6: Procedural Logic Nodes with `ZW-FUNCTION`
+
+This phase introduces the `ZW-FUNCTION` block, allowing ZW definitions to drive procedural modeling operations within Blender using its powerful Geometry Nodes system. This enables the creation of parametric and generative content directly from ZW commands.
+
+#### ZW Syntax for Functions:
+
+A `ZW-FUNCTION` is defined as a block with the following structure:
+
+```zw
+ZW-FUNCTION:
+  NAME: <OptionalDescriptiveName> // For logging or debugging
+  TARGET: <TargetObjectName>     // Name of an existing ZW-OBJECT to modify or use as source
+  OPERATION: <OperationType>     // E.g., ARRAY, DISPLACE_NOISE
+  PARAMS:                       // Dictionary of parameters specific to the OPERATION
+    <ParamName1>: <Value1>
+    <ParamName2>: <Value2>
+    // ...
+///
+```
+
+-   **`NAME`**: An optional name for this function call, useful for identification.
+-   **`TARGET`**: The `NAME` of a previously defined `ZW-OBJECT` that this function will operate on (either by modifying it or using it as a source).
+-   **`OPERATION`**: A string identifying the type of procedural operation to perform.
+-   **`PARAMS`**: A nested dictionary of parameters that control the specified `OPERATION`.
+
+#### Initially Supported Operations:
+
+The `blender_adapter.py` processes these `ZW-FUNCTION` blocks by adding and configuring Geometry Node modifiers on the target objects (or on new host objects for generative operations like ARRAY).
+
+1.  **`OPERATION: ARRAY`**
+    -   **Purpose:** Creates a linear array of instances of the `TARGET` object.
+    -   **Behavior:** A new empty host object is created in Blender. A Geometry Nodes modifier is added to this host, which instances the original `TARGET` object.
+    -   **Key `PARAMS`:**
+        -   `COUNT: <Integer>`: The number of instances to create in the array (e.g., `5`).
+        -   `OFFSET: "(x, y, z)"`: A string tuple defining the offset vector between each instance (e.g., `"(2.0, 0, 0)"`).
+        -   `MODE: INSTANCE | REALIZE` (Optional): Defaults to `INSTANCE`. If `REALIZE`, the instances are converted to real geometry.
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          TYPE: Cylinder
+          NAME: PillarUnit
+          SCALE: (0.2, 0.2, 1.5)
+        ///
+
+        ZW-FUNCTION:
+          NAME: CreatePillarRow
+          TARGET: PillarUnit
+          OPERATION: ARRAY
+          PARAMS:
+            COUNT: 6
+            OFFSET: "(0, 2.0, 0)" // Array along Y-axis
+        ///
+        ```
+
+2.  **`OPERATION: DISPLACE_NOISE`**
+    -   **Purpose:** Modifies the geometry of the `TARGET` object by displacing its vertices using a procedural noise texture.
+    -   **Behavior:** Adds and configures a Geometry Nodes modifier directly on the `TARGET` object. For best results, the target object should have sufficient geometry (subdivisions).
+    -   **Key `PARAMS`:**
+        -   `SCALE: <Float>`: The scale of the noise texture (controls frequency, e.g., `3.0`).
+        -   `STRENGTH: <Float>`: The magnitude of the displacement (e.g., `0.5`).
+        -   `AXIS: X | Y | Z | NORMAL` (Optional): The axis or direction of displacement. Defaults to `Z` or `NORMAL` depending on implementation. (Current implementation primarily supports X, Y, or Z via `Combine XYZ` node).
+        -   `SEED: <Integer>` (Optional): A seed value for the noise texture to vary the pattern (passed to W-input of Noise Texture node).
+    -   **Example:**
+        ```zw
+        ZW-OBJECT:
+          TYPE: Plane
+          NAME: GroundPlane
+          SCALE: (20, 20, 1)
+          // Consider adding subdivisions via another function or manually for good displacement
+        ///
+
+        ZW-FUNCTION:
+          NAME: SculptTerrainSurface
+          TARGET: GroundPlane
+          OPERATION: DISPLACE_NOISE
+          PARAMS:
+            SCALE: 5.0
+            STRENGTH: 0.75
+            AXIS: Z
+        ///
+        ```
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function now recognizes `ZW-FUNCTION` keys.
+-   It calls `handle_zw_function_block`, which acts as a dispatcher based on the `OPERATION` string.
+-   Specific functions like `apply_array_gn` and `apply_displace_noise_gn` are responsible for:
+    -   Finding the target Blender object(s).
+    -   Creating a new host object if the operation is generative (like `ARRAY`).
+    -   Adding a Geometry Nodes modifier to the appropriate object.
+    -   Programmatically constructing a node tree within the modifier's node group. This involves creating nodes (e.g., Object Info, Mesh Line, Instance on Points, Set Position, Noise Texture, Combine XYZ, Vector Math, Group Input, Group Output) and linking their sockets.
+    -   Setting the input values of these nodes based on the `PARAMS` from the ZW definition.
+
+This initial implementation of `ZW-FUNCTION` provides a powerful pathway to defining procedural geometry directly within the ZW protocol, enabling more dynamic and complex scene generation in Blender. Future extensions can add more operations, more sophisticated parameter handling, and exposure of Geometry Node Group inputs directly.
+
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
 

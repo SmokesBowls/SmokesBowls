@@ -3,7 +3,7 @@
 ZW-SCENE_SETUP:
   BACKGROUND_COLOR: DarkBlue
   LIGHTING: StandardStudio
-  ACTIVE_COLLECTION: SceneRoot // Optional hint, not processed yet
+  ACTIVE_COLLECTION: SceneRoot
 ///
 
 // Simple object for default collection
@@ -12,7 +12,7 @@ ZW-OBJECT: Sphere
   LOCATION: (0,0,5)
 ///
 
-// Example of explicit COLLECTION attribute on an object
+// Object with explicit COLLECTION attribute
 ZW-OBJECT:
   TYPE: Sphere
   NAME: ArtifactSphere
@@ -20,13 +20,86 @@ ZW-OBJECT:
   SCALE: (0.7, 0.7, 0.7)
   MATERIAL: GlowingArtifactOrange
   COLOR: "#FFA500"
-  COLLECTION: SpecialArtifacts // Explicit assignment
+  COLLECTION: SpecialArtifacts
 ///
 
-// Example of a ZW-COLLECTION block for grouping
+// --- Test Case for ZW-FUNCTION: ARRAY ---
+ZW-OBJECT:
+  TYPE: Cylinder
+  NAME: PillarSource
+  LOCATION: (0, 5, 0.5) // Adjusted Y to not overlap with RobotPlatform
+  SCALE: (0.2, 0.2, 1.0)
+  MATERIAL: Stone
+  COLOR: "(0.5,0.5,0.5,1)"
+  SHADING: Smooth
+  COLLECTION: ArchitecturePrimitives
+///
+
+ZW-FUNCTION:
+  NAME: CreatePillarRow
+  TARGET: PillarSource
+  OPERATION: ARRAY
+  PARAMS:
+    COUNT: 5
+    OFFSET: "(2.0, 0, 0)"
+    // MODE: INSTANCE // Default, or REALIZE
+///
+
+// --- Test Case for ZW-FUNCTION: DISPLACE_NOISE ---
+ZW-OBJECT:
+  TYPE: Plane
+  NAME: TerrainBase
+  LOCATION: (0, -10, 0)
+  SCALE: (10, 10, 1)
+  MATERIAL: EarthyGround
+  COLOR: "#A0522D"
+  SHADING: Smooth
+  // SUBDIVISIONS: 50 // For good displacement detail; adapter needs to handle this via a function or GeoNode.
+  COLLECTION: Landscapes
+///
+
+ZW-FUNCTION:
+  NAME: SculptTerrain
+  TARGET: TerrainBase
+  OPERATION: DISPLACE_NOISE
+  PARAMS:
+    SCALE: 3.0
+    STRENGTH: 0.7
+    AXIS: Z
+    // SEED: 123
+///
+
+// --- Test Case for ZW-FUNCTION: ARRAY with a more complex source (parented object) ---
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ModuleSource
+  LOCATION: (10, 10, 0.5)
+  SCALE: (1,1,1)
+  MATERIAL: ModuleMat
+  COLLECTION: Modules // Assign to a collection
+  CHILDREN:
+    - ZW-OBJECT:
+        TYPE: Sphere
+        NAME: ModuleSensor
+        LOCATION: (0,0,0.6) // Relative to ModuleSource origin (after parenting)
+        SCALE: (0.2,0.2,0.2)
+        MATERIAL: SensorGlass
+///
+
+ZW-FUNCTION:
+  NAME: CreateModuleArray
+  TARGET: ModuleSource
+  OPERATION: ARRAY
+  PARAMS:
+    COUNT: 3
+    OFFSET: "(0, 2.0, 0)"
+    MODE: INSTANCE
+///
+
+
+// --- Existing ZW-COLLECTION block example (for context) ---
 ZW-COLLECTION: RobotAssembly
-  // This collection itself could have metadata in the future, e.g., LINK_TO_SCENE: TRUE
-  CHILDREN: // Using CHILDREN to define objects within this collection context
+  CHILDREN:
     - ZW-OBJECT:
         TYPE: Cube
         NAME: RobotTorso
@@ -34,93 +107,40 @@ ZW-COLLECTION: RobotAssembly
         SCALE: (1, 0.5, 1.5)
         MATERIAL: RobotMetal
         COLOR: "(0.6,0.6,0.7,1)"
-        CHILDREN: // RobotHead is a child of RobotTorso
+        CHILDREN:
           - ZW-OBJECT:
               TYPE: Cube
               NAME: RobotHead
-              LOCATION: (0, 0, 0.75) // Location relative to RobotTorso if parenting is local
+              LOCATION: (0, 0, 0.75)
               SCALE: (0.6, 0.6, 0.6)
               MATERIAL: RobotVisorBlue
               COLOR: "#00FFFF"
-    - ZW-COLLECTION: ArmUnit_Left // Nested Collection within RobotAssembly
+    - ZW-COLLECTION: ArmUnit_Left
         CHILDREN:
           - ZW-OBJECT:
               TYPE: Sphere
               NAME: LeftShoulder
-              LOCATION: (-0.7, 0, 2.0) // Relative to RobotAssembly's context, will be parented to RobotTorso
+              LOCATION: (-0.7, 0, 2.0)
               SCALE: (0.3,0.3,0.3)
-              PARENT_HINT: RobotTorso // Semantic hint, actual parenting via CHILDREN on RobotTorso
+              PARENT_HINT: RobotTorso
           - ZW-OBJECT:
               TYPE: Cube
               NAME: LeftBicep
-              LOCATION: (-1.2, 0, 2.0) // Relative to RobotAssembly's context
+              LOCATION: (-1.2, 0, 2.0)
               SCALE: (0.2,0.5,0.2)
-              PARENT_HINT: LeftShoulder // Semantic hint
-              CHILDREN: // Example of child for LeftBicep, still in ArmUnit_Left
+              PARENT_HINT: LeftShoulder
+              CHILDREN:
                 - ZW-OBJECT:
                     TYPE: Sphere
                     NAME: LeftElbowJoint
                     LOCATION: (0, -0.3, 0)
                     SCALE: (0.15,0.15,0.15)
-    - ZW-OBJECT: // This object is directly in RobotAssembly collection
+    - ZW-OBJECT:
         TYPE: Plane
         NAME: RobotPlatform
         LOCATION: (0,0,0)
         SCALE: (3,3,0.1)
 ///
 
-// Another top-level object, will go into scene's master collection by default
-ZW-OBJECT:
-  TYPE: Cone
-  NAME: MarkerCone
-  LOCATION: (5, 5, 0.5)
-///
-
-// Object explicitly put into a different top-level collection
-ZW-OBJECT:
-  TYPE: Cube
-  NAME: IsolatedBox
-  LOCATION: (5, -5, 1)
-  COLLECTION: MiscCubes // Another explicit assignment
-///
-
-
-// Existing objects from prior tests - can be kept or removed as needed
-// For now, keeping them to ensure no regressions.
-// They will go into the default scene collection unless adapter logic changes.
-ZW-OBJECT:
-  TYPE: Cube
-  NAME: ShinyRedCube
-  LOCATION: (-4, 0, 1)
-  SCALE: (1, 1, 1)
-  MATERIAL: ShinyRedPlastic
-  COLOR: "#FF0000"
-  SHADING: Smooth
-  BSDF:
-    METALLIC: 0.2
-    ROUGHNESS: 0.1
-    SPECULAR: 0.7
-///
-
-ZW-OBJECT:
-  TYPE: Cube
-  NAME: ParentMaterialBox
-  LOCATION: (8, 8, 1) // Adjusted location to avoid overlap
-  MATERIAL: ParentBoxMat
-  COLOR: "(0.5, 0.5, 0.5, 1.0)"
-  CHILDREN:
-    - ZW-OBJECT:
-        TYPE: Sphere
-        NAME: ChildShinySphere
-        LOCATION: (0,0,1)
-        SCALE: (0.5,0.5,0.5)
-        MATERIAL: ShinyChildMat
-        BSDF:
-            METALLIC: 0.9
-            ROUGHNESS: 0.05
-        COLOR: "#FFFFFF"
-        SHADING: Smooth
-///
-
-NOTE: This scene tests default collection assignment, explicit COLLECTION attribute on ZW-OBJECT, ZW-COLLECTION blocks for grouping, nested collections, and interaction with PARENT/CHILDREN hierarchy. The adapter will need to manage Blender collections accordingly.
+NOTE: This scene now includes ZW-FUNCTION blocks for ARRAY and DISPLACE_NOISE operations, alongside previous examples for attributes, parenting, and collections.
 ///

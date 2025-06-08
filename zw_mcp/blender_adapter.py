@@ -271,17 +271,201 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
         return None
     return created_bpy_obj
 
+# --- Geometry Node Function Handlers ---
+
+def apply_array_gn(source_obj: bpy.types.Object, params: dict):
+    if not bpy: return
+    if source_obj is None:
+        print("[!] ARRAY target object not found or provided. Skipping.")
+        return
+
+    print(f"[*] Applying ARRAY GN to create instances of '{source_obj.name}' with params: {params}")
+
+    array_host_name = f"{source_obj.name}_ArrayResult"
+    array_host_obj = bpy.data.objects.new(array_host_name, None) # Empty object for GN
+
+    # Link to the same collection as the source object, or scene's master if source is not in one
+    source_collection = source_obj.users_collection[0] if source_obj.users_collection else bpy.context.scene.collection
+    source_collection.objects.link(array_host_obj)
+    print(f"    Created ARRAY host object '{array_host_name}' in collection '{source_collection.name}'")
+
+    mod = array_host_obj.modifiers.new(name="ZW_Array", type='NODES')
+    gn_tree_name = f"ZW_Array_{source_obj.name}_GN"
+
+    # Check if node group already exists, reuse if so, otherwise create
+    if gn_tree_name in bpy.data.node_groups:
+        node_group = bpy.data.node_groups[gn_tree_name]
+        print(f"    Reusing existing Node Group: {gn_tree_name}")
+    else:
+        node_group = bpy.data.node_groups.new(name=gn_tree_name, type='GeometryNodeTree')
+        print(f"    Created new Node Group: {gn_tree_name}")
+
+        nodes = node_group.nodes
+        links = node_group.links
+        nodes.clear() # Clear default nodes
+
+        group_input = nodes.new(type='NodeGroupInput')
+        group_input.location = (-400, 0)
+        group_output = nodes.new(type='NodeGroupOutput')
+        group_output.location = (400, 0)
+
+        # Define inputs/outputs for the group if needed (e.g. for dynamic params)
+        # For now, params are set directly on nodes.
+
+        obj_info = nodes.new('GeometryNodeObjectInfo')
+        obj_info.location = (-200, 200)
+        obj_info.inputs['Object'].default_value = source_obj
+
+        mesh_line = nodes.new('NodeGeometryMeshLine')
+        mesh_line.location = (-200, -100)
+        count = int(params.get("COUNT", 5))
+        offset_vec_str = params.get("OFFSET", "(0,0,1)") # Default offset changed to Z-axis for more visible pillar example
+        offset_vec = safe_eval(offset_vec_str, (0,0,1))
+
+        mesh_line.mode = 'END_POINTS' # Use start and end points for offset
+        # For 'END_POINTS' mode with offset, we set 'Start Location' to (0,0,0) and 'End Location' to the total offset
+        # For a count of N items, there are N-1 segments for the offset.
+        # If offset is per item, total_offset = (count-1) * offset_vec IF offset is between items.
+        # Or, if offset is total length, and count is number of points:
+        # mesh_line.inputs['Start Location'].default_value = (0,0,0)
+        # mesh_line.inputs['Offset'].default_value = offset_vec # This makes it use the 'Offset' mode implicitly if count changes
+        # Let's use the direct 'Offset' mode which is simpler with count
+        mesh_line.mode = 'OFFSET'
+        mesh_line.inputs['Count'].default_value = count
+        mesh_line.inputs['Offset'].default_value = offset_vec
+
+
+        inst_on_pts = nodes.new('GeometryNodeInstanceOnPoints')
+        inst_on_pts.location = (0, 0)
+
+        links.new(mesh_line.outputs['Mesh'], inst_on_pts.inputs['Points'])
+        links.new(obj_info.outputs['Geometry'], inst_on_pts.inputs['Instance'])
+
+        if str(params.get("MODE", "INSTANCE")).upper() == "REALIZE":
+            realize = nodes.new('GeometryNodeRealizeInstances')
+            realize.location = (200, 0)
+            links.new(inst_on_pts.outputs['Instances'], realize.inputs['Geometry'])
+            links.new(realize.outputs['Geometry'], group_output.inputs.new('NodeSocketGeometry', 'Geometry'))
+            print("    Array set to REALIZED instances.")
+        else:
+            links.new(inst_on_pts.outputs['Instances'], group_output.inputs.new('NodeSocketGeometry', 'Geometry'))
+            print("    Array set to INSTANCED instances.")
+
+    mod.node_group = node_group
+    bpy.context.view_layer.objects.active = array_host_obj
+    array_host_obj.select_set(True)
+    print(f"    Applied ARRAY to '{array_host_name}' using source '{source_obj.name}'")
+
+
+def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
+    if not bpy: return
+    if target_obj is None or target_obj.type != 'MESH':
+        print(f"[!] DISPLACE_NOISE target object '{target_obj.name if target_obj else 'None'}' is not a MESH. Skipping.")
+        return
+
+    print(f"[*] Applying DISPLACE_NOISE GN to '{target_obj.name}' with params: {params}")
+
+    mod = target_obj.modifiers.new(name="ZW_DisplaceNoise", type='NODES')
+    gn_tree_name = f"ZW_Displace_{target_obj.name}_GN"
+
+    if gn_tree_name in bpy.data.node_groups:
+        node_group = bpy.data.node_groups[gn_tree_name]
+        print(f"    Reusing existing Node Group: {gn_tree_name}")
+    else:
+        node_group = bpy.data.node_groups.new(name=gn_tree_name, type='GeometryNodeTree')
+        print(f"    Created new Node Group: {gn_tree_name}")
+
+        nodes = node_group.nodes
+        links = node_group.links
+        nodes.clear()
+
+        group_input = nodes.new(type='NodeGroupInput')
+        group_input.location = (-600, 0)
+        group_output = nodes.new(type='NodeGroupOutput')
+        group_output.location = (400, 0)
+
+        # Ensure input and output sockets are named 'Geometry'
+        node_group.inputs.new('NodeSocketGeometry', 'Geometry')
+        node_group.outputs.new('NodeSocketGeometry', 'Geometry')
+
+
+        set_pos = nodes.new('GeometryNodeSetPosition')
+        set_pos.location = (0, 0)
+
+        noise_tex = nodes.new('ShaderNodeTexNoise')
+        noise_tex.location = (-400, -200)
+        noise_tex.noise_dimensions = '3D' # Default is 3D
+        noise_tex.inputs['Scale'].default_value = float(params.get("SCALE", 5.0))
+        # Use 'W' as a proxy for seed if noise is 3D, or a dedicated seed input if available/desired for 4D.
+        noise_tex.inputs['W'].default_value = float(params.get("SEED", 0.0))
+
+        # To make noise affect position, we need to convert its factor (0-1) or color (vector)
+        # into a displacement vector. Usually, this involves Normal.
+        normal_node = nodes.new('GeometryNodeInputNormal')
+        normal_node.location = (-400, 0)
+
+        # Scale the noise factor by strength
+        strength_scale_node = nodes.new('ShaderNodeMath') # Using Math node for scalar strength
+        strength_scale_node.operation = 'MULTIPLY'
+        strength_scale_node.location = (-200, -200)
+        strength_scale_node.inputs[1].default_value = float(params.get("STRENGTH", 0.5))
+        links.new(noise_tex.outputs['Fac'], strength_scale_node.inputs[0])
+
+
+        # Multiply scaled noise factor by normal vector to displace along normal
+        vec_multiply_normal = nodes.new('ShaderNodeVectorMath')
+        vec_multiply_normal.operation = 'MULTIPLY' # Or 'SCALE' if using the factor directly on normal
+        vec_multiply_normal.location = (-200, 0)
+        links.new(normal_node.outputs['Normal'], vec_multiply_normal.inputs[0])
+        links.new(strength_scale_node.outputs['Value'], vec_multiply_normal.inputs[1]) # Use scaled noise factor
+
+        # Handle displacement axis (simplified: Z or Normal)
+        displace_axis = params.get("AXIS", "NORMAL").upper() # Default to NORMAL
+
+        offset_vector_source_node = None
+        if displace_axis == 'Z':
+            combine_xyz = nodes.new('ShaderNodeCombineXYZ')
+            combine_xyz.location = (-200, 200) # Position it if used
+            links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['Z']) # Noise Fac directly to Z
+            # X and Y inputs of CombineXYZ remain 0 by default.
+            offset_vector_source_node = combine_xyz
+        elif displace_axis == 'X':
+            combine_xyz = nodes.new('ShaderNodeCombineXYZ')
+            combine_xyz.location = (-200, 200)
+            links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['X'])
+            offset_vector_source_node = combine_xyz
+        elif displace_axis == 'Y':
+            combine_xyz = nodes.new('ShaderNodeCombineXYZ')
+            combine_xyz.location = (-200, 200)
+            links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['Y'])
+            offset_vector_source_node = combine_xyz
+        else: # Default to Normal
+            offset_vector_source_node = vec_multiply_normal
+            print("    Displacing along Normal.")
+
+
+        links.new(offset_vector_source_node.outputs['Vector'], set_pos.inputs['Offset'])
+
+        links.new(group_input.outputs['Geometry'], set_pos.inputs['Geometry'])
+        links.new(set_pos.outputs['Geometry'], group_output.inputs['Geometry'])
+
+    mod.node_group = node_group
+    bpy.context.view_layer.objects.active = target_obj
+    target_obj.select_set(True)
+    print(f"    Applied DISPLACE_NOISE to '{target_obj.name}'")
+
+# --- Main Processing Logic ---
 
 def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_collection=None):
     """
     Recursively processes the parsed ZW structure to find and create objects.
     Passes parent_bpy_obj for parenting and current_bpy_collection for collection assignment.
     """
-    if not bpy: # Should be checked at the start of run_blender_adapter ideally
+    if not bpy:
         return
 
     if current_bpy_collection is None:
-        current_bpy_collection = bpy.context.scene.collection # Default to scene's master collection
+        current_bpy_collection = bpy.context.scene.collection
 
     if not isinstance(data_dict, dict):
         return
@@ -289,9 +473,8 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
     for key, value in data_dict.items():
         created_bpy_object_for_current_zw_object = None
         obj_attributes_for_current_zw_object = None
-        target_collection_for_this_object = current_bpy_collection # Default for current object
+        target_collection_for_this_object = current_bpy_collection
 
-        # Handle ZW-COLLECTION blocks first to set context for children
         if key.upper().startswith("ZW-COLLECTION"):
             collection_name = key.split(":", 1)[1].strip() if ":" in key else key.replace("ZW-COLLECTION", "").strip()
             if not collection_name: collection_name = "Unnamed_ZW_Collection"
@@ -303,43 +486,42 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 for child_def_item in value["CHILDREN"]:
                     if isinstance(child_def_item, dict):
                         process_zw_structure(child_def_item, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
-            elif isinstance(value, dict) : # If it's a dict but no CHILDREN, process its content in new collection context
+            elif isinstance(value, dict) :
                 process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
-            continue # Finished processing this ZW-COLLECTION key
+            continue
 
-        # Identify ZW-OBJECT definitions
+        elif key.upper() == "ZW-FUNCTION": # Handle ZW-FUNCTION
+            if isinstance(value, dict):
+                print(f"[*] Processing ZW-FUNCTION block: {value.get('NAME', 'Unnamed Function')}")
+                handle_zw_function_block(value)
+            else:
+                print(f"[!] Warning: ZW-FUNCTION value is not a dictionary: {value}")
+            continue # Finished processing this ZW-FUNCTION key
+
+
         if key.upper() == "ZW-OBJECT":
-            if isinstance(value, dict): # ZW-OBJECT: { TYPE: Cube, ... }
+            if isinstance(value, dict):
                 obj_attributes_for_current_zw_object = value
-            elif isinstance(value, str): # ZW-OBJECT: Sphere
+            elif isinstance(value, str):
                 obj_attributes_for_current_zw_object = {"TYPE": value}
         elif key.lower() in ["sphere", "cube", "plane", "cone", "cylinder", "torus"] and isinstance(value, dict):
-            # Cube: { NAME: MyCube ... }
             obj_attributes_for_current_zw_object = value.copy()
-            obj_attributes_for_current_zw_object["TYPE"] = key # Add type from the key itself
+            obj_attributes_for_current_zw_object["TYPE"] = key
 
-        # If a ZW-OBJECT was identified, create it and handle its collection and children
         if obj_attributes_for_current_zw_object:
             created_bpy_object_for_current_zw_object = handle_zw_object_creation(obj_attributes_for_current_zw_object, parent_bpy_obj)
 
             if created_bpy_object_for_current_zw_object:
-                # Determine target collection for this specific object
                 explicit_collection_name = obj_attributes_for_current_zw_object.get("COLLECTION")
                 if explicit_collection_name:
-                    # Explicit collections are always top-level relative to scene master for now
                     target_collection_for_this_object = get_or_create_collection(explicit_collection_name, parent_collection=bpy.context.scene.collection)
-                # else: it remains the current_bpy_collection passed in or set by a ZW-COLLECTION block
 
-                # Link object to its target collection, unlinking from others (e.g., default scene collection)
                 if target_collection_for_this_object:
-                    # Unlink from all collections it might currently be in
                     for coll in created_bpy_object_for_current_zw_object.users_collection:
                         coll.objects.unlink(created_bpy_object_for_current_zw_object)
-                    # Link to the target collection
                     target_collection_for_this_object.objects.link(created_bpy_object_for_current_zw_object)
                     print(f"    Linked '{created_bpy_object_for_current_zw_object.name}' to collection '{target_collection_for_this_object.name}'")
 
-                # Process CHILDREN of this ZW-OBJECT
                 children_list = obj_attributes_for_current_zw_object.get("CHILDREN")
                 if children_list and isinstance(children_list, list):
                     print(f"[*] Processing CHILDREN for '{created_bpy_object_for_current_zw_object.name}' in collection '{target_collection_for_this_object.name}'")
