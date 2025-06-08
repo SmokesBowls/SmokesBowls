@@ -826,6 +826,77 @@ The `blender_adapter.py` processes these `ZW-FUNCTION` blocks by adding and conf
 
 This initial implementation of `ZW-FUNCTION` provides a powerful pathway to defining procedural geometry directly within the ZW protocol, enabling more dynamic and complex scene generation in Blender. Future extensions can add more operations, more sophisticated parameter handling, and exposure of Geometry Node Group inputs directly.
 
+### Phase 6.7: Interactive Drivers with `ZW-DRIVER`
+
+This phase introduces the `ZW-DRIVER` block, enabling the creation of dynamic relationships between object properties within Blender. This allows one property to control another, potentially through a scripted expression, bringing more interactivity and procedural linkage to ZW-defined scenes.
+
+#### ZW Syntax for Drivers:
+
+A `ZW-DRIVER` block defines a single driver relationship:
+
+```zw
+ZW-DRIVER:
+  NAME: <OptionalDriverName>          // An optional name for the driver itself (for debugging/identification)
+  SOURCE_OBJECT: <SourceObjectName>   // The NAME of the Blender object whose property will drive the target
+  SOURCE_PROPERTY: "<RNA_DataPath>"   // The RNA data path to the source property (e.g., "location.x", "scale[2]", "modifiers['MyModifierName'].some_value")
+  TARGET_OBJECT: <TargetObjectName>   // The NAME of the Blender object whose property will be driven
+  TARGET_PROPERTY: "<RNA_DataPath>"   // The RNA data path to the target property (e.g., "rotation_euler[0]", "material_slots[0]...")
+  EXPRESSION: "<PythonExpression>"   // A Python expression. The source property's value is available as 'var'. E.g., "var * 2.0 + 0.5"
+///
+```
+
+-   **`NAME`** (Optional): A descriptive name for this driver setup.
+-   **`SOURCE_OBJECT`**: The name of the Blender object that provides the input value for the driver.
+-   **`SOURCE_PROPERTY`**: The specific property (RNA data path) on the `SOURCE_OBJECT` to use as input. Examples: `"location.x"`, `"scale[2]"`, `"rotation_euler[0]"`.
+-   **`TARGET_OBJECT`**: The name of the Blender object whose property will be controlled by this driver.
+-   **`TARGET_PROPERTY`**: The specific property (RNA data path) on the `TARGET_OBJECT` to be driven. This property will have a driver added to it. The path can include array indices like `location[0]` or be a direct property like `rotation_euler.x` (though the adapter uses `driver_add('rotation_euler', 0)` for the latter).
+-   **`EXPRESSION`**: A Python expression string that defines how the source property's value (available as the variable `var` in the expression) is transformed to set the target property. If omitted, it defaults to `"var"` for a direct copy.
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function now recognizes `ZW-DRIVER` keys.
+-   It calls `handle_zw_driver_block` with the associated dictionary of driver parameters.
+-   `handle_zw_driver_block`:
+    1.  Retrieves the source and target Blender objects by their names.
+    2.  Uses `target_obj.driver_add(rna_path_to_target_prop, index_if_any)` to add a driver to the specified target property.
+    3.  Configures the driver:
+        -   Sets its `type` to `'SCRIPTED'`.
+        -   Sets its `expression` to the provided ZW `EXPRESSION`.
+    4.  Adds a driver variable (typically named `var`):
+        -   Sets its `type` to `'SINGLE_PROP'`.
+        -   Links its target to the `SOURCE_OBJECT` (`id_type = 'OBJECT'`, `id = source_obj`).
+        -   Sets its `data_path` to the `SOURCE_PROPERTY` from the ZW definition.
+-   This creates a live link where changes to the source property dynamically update the target property according to the expression.
+
+#### Example:
+
+```zw
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ControlCube
+  LOCATION: (0,0,1)
+///
+
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: DrivenSphere
+  LOCATION: (0,2,1)
+  SCALE: (0.5,0.5,0.5)
+///
+
+ZW-DRIVER:
+  NAME: CubeX_Drives_SphereZScale
+  SOURCE_OBJECT: ControlCube
+  SOURCE_PROPERTY: "location.x"
+  TARGET_OBJECT: DrivenSphere
+  TARGET_PROPERTY: "scale[2]" // Drives the Z-scale (index 2 for Z)
+  EXPRESSION: "var * 0.3 + 0.1" // Sphere's Z-scale = ControlCube.location.x * 0.3 + 0.1
+///
+```
+In this example, moving the `ControlCube` along its X-axis will dynamically change the Z-scale of the `DrivenSphere`.
+
+This `ZW-DRIVER` functionality opens up possibilities for creating more dynamic and interconnected scenes directly from ZW, forming a bridge towards more complex animation and rigging setups.
+
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
 

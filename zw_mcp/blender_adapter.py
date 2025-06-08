@@ -454,6 +454,74 @@ def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
     target_obj.select_set(True)
     print(f"    Applied DISPLACE_NOISE to '{target_obj.name}'")
 
+def handle_zw_driver_block(driver_data: dict):
+    if not bpy: return
+
+    source_object_name = driver_data.get("SOURCE_OBJECT")
+    source_property_path = driver_data.get("SOURCE_PROPERTY")
+    target_object_name = driver_data.get("TARGET_OBJECT")
+    target_property_path = driver_data.get("TARGET_PROPERTY")
+    expression = driver_data.get("EXPRESSION", "var") # Default to direct copy
+    driver_name = driver_data.get("NAME", f"ZWDriver_{target_object_name}_{target_property_path}")
+
+    if not all([source_object_name, source_property_path, target_object_name, target_property_path]):
+        print(f"[!] Error in ZW-DRIVER '{driver_name}': Missing one or more required fields (SOURCE_OBJECT, SOURCE_PROPERTY, TARGET_OBJECT, TARGET_PROPERTY). Skipping.")
+        return
+
+    source_obj = bpy.data.objects.get(source_object_name)
+    target_obj = bpy.data.objects.get(target_object_name)
+
+    if not source_obj:
+        print(f"[!] Error in ZW-DRIVER '{driver_name}': Source object '{source_object_name}' not found. Skipping.")
+        return
+    if not target_obj:
+        print(f"[!] Error in ZW-DRIVER '{driver_name}': Target object '{target_object_name}' not found. Skipping.")
+        return
+
+    print(f"[*] Creating ZW-DRIVER '{driver_name}': {source_object_name}.{source_property_path} -> {target_object_name}.{target_property_path}")
+
+    try:
+        parsed_target_path = target_property_path
+        parsed_target_index = -1
+        if '[' in target_property_path and target_property_path.endswith(']'):
+            path_parts = target_property_path.split('[')
+            parsed_target_path = path_parts[0]
+            try:
+                parsed_target_index = int(path_parts[1].rstrip(']'))
+            except ValueError:
+                print(f"    [Error] Invalid index in TARGET_PROPERTY: {target_property_path} for driver '{driver_name}'. Skipping.")
+                return
+
+        # Add driver
+        if parsed_target_index != -1:
+            fcurve = target_obj.driver_add(parsed_target_path, parsed_target_index)
+        else:
+            # This handles paths like "location.x", "rotation_euler.z", custom properties etc.
+            fcurve = target_obj.driver_add(parsed_target_path)
+
+        driver = fcurve.driver
+        driver.type = 'SCRIPTED'
+        driver.expression = expression
+
+        # Add variable
+        var = driver.variables.new()
+        var.name = "var" # Variable name used in the expression
+        var.type = 'SINGLE_PROP'
+
+        var_target = var.targets[0]
+        var_target.id_type = 'OBJECT'
+        var_target.id = source_obj
+        var_target.data_path = source_property_path
+
+        print(f"    ✅ Successfully created driver: '{driver_name}'")
+        print(f"       Source: {source_obj.name} -> {source_property_path}")
+        print(f"       Target: {target_obj.name} -> {target_property_path} (index: {parsed_target_index if parsed_target_index != -1 else 'N/A'})")
+        print(f"       Expression: {expression}")
+
+    except Exception as e:
+        print(f"    [!] Error setting up driver '{driver_name}': {e}")
+
+
 # --- Main Processing Logic ---
 
 def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_collection=None):
@@ -490,13 +558,21 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
             continue
 
-        elif key.upper() == "ZW-FUNCTION": # Handle ZW-FUNCTION
+        elif key.upper() == "ZW-FUNCTION":
             if isinstance(value, dict):
                 print(f"[*] Processing ZW-FUNCTION block: {value.get('NAME', 'Unnamed Function')}")
-                handle_zw_function_block(value)
+                handle_zw_function_block(value) # Pass the dictionary value
             else:
                 print(f"[!] Warning: ZW-FUNCTION value is not a dictionary: {value}")
-            continue # Finished processing this ZW-FUNCTION key
+            continue
+
+        elif key.upper() == "ZW-DRIVER": # Handle ZW-DRIVER
+            if isinstance(value, dict):
+                print(f"[*] Processing ZW-DRIVER block: {value.get('NAME', 'Unnamed Driver')}")
+                handle_zw_driver_block(value) # Pass the dictionary value
+            else:
+                print(f"[!] Warning: ZW-DRIVER value is not a dictionary: {value}")
+            continue
 
 
         if key.upper() == "ZW-OBJECT":
