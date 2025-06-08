@@ -731,6 +731,105 @@ Two primary methods are available for organizing objects into Blender Collection
 
 This collection system provides a powerful way to structure and manage ZW-generated scenes, mirroring common practices in 3D production workflows.
 
+---
+## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
+
+This phase introduces the capability to export Blender scene data back into the ZW format, enabling a "roundtrip" workflow where scenes can be defined in ZW, modified or created in Blender, and then re-serialized as ZW. This is crucial for hybrid human-AI design processes and for capturing Blender scene states in the ZW protocol.
+
+### Core Component: `zw_mcp/blender_exporter.py`
+
+-   **Purpose:** This Python script is designed to be executed by Blender's internal Python interpreter. It inspects the Blender scene (either selected objects or all mesh objects) and converts their properties back into a ZW-formatted text string, which is then saved to a file.
+-   **Functionality:**
+    -   **Scope of Export:**
+        -   Can export either only currently selected mesh objects or all mesh objects in the active scene. This is controlled by a command-line argument (`--all`).
+    -   **Attribute Export:** For each exported mesh object, the script attempts to extract and format the following properties:
+        -   `TYPE`: Determined by checking a custom property `obj.get("ZW_TYPE")` first. If not found, it uses heuristics based on `obj.data.name` (e.g., "Cube", "Sphere"). Defaults to "Mesh" if undetermined.
+        -   `NAME`: The object's name in Blender (`obj.name`).
+        -   `LOCATION`: The object's location (`obj.location`) formatted as `"(x, y, z)"`.
+        -   `SCALE`: The object's scale (`obj.scale`) formatted as `"(sx, sy, sz)"`.
+        -   `ROTATION`: The object's Euler rotation (`obj.rotation_euler`) formatted as `"(rx, ry, rz)"` (in radians).
+        -   `MATERIAL`: If the object has materials, the name of the first material (`obj.data.materials[0].name`).
+        -   `COLOR`: If a material is present, attempts to get the "Base Color" from its Principled BSDF node and formats it as `"#RRGGBB"`.
+        -   `PARENT`: If the object is parented, the name of its parent object (`obj.parent.name`).
+        -   `COLLECTION`: The name of the first collection the object belongs to (from `obj.users_collection[0].name`, if available).
+    -   **ZW Output Structure (First Pass - Flat List):**
+        -   The exporter generates a flat list of `ZW-OBJECT:` blocks. Each block represents one exported Blender object and its attributes.
+        -   Hierarchical relationships (parenting, collections) are represented as attributes (`PARENT: <ParentName>`, `COLLECTION: <CollectionName>`) within each object's block, rather than through nested ZW structures like `CHILDREN:` or `ZW-COLLECTION:` blocks in this initial version.
+        -   The existing `zw_parser.to_zw()` function is used to format the dictionary of each object's attributes into a valid ZW string block.
+    -   **Output File:** The generated ZW text is saved to a user-specified output file path.
+
+### Helper Functions in `blender_exporter.py`:
+
+-   `format_vector_to_zw(vector, precision=3)`: Converts Blender `Vector` objects to ZW tuple strings.
+-   `format_color_to_zw_hex(rgba_color)`: Converts Blender RGBA colors to ZW hex color strings.
+-   `get_object_zw_type(blender_obj)`: Implements the logic for determining the ZW `TYPE` string.
+
+### How to Use the ZW Exporter:
+
+The `blender_exporter.py` script is primarily intended to be run from the command line using Blender in background mode, but can also be run from Blender's scripting tab if arguments are hardcoded or handled differently.
+
+1.  **Prerequisites:**
+    -   Blender installed.
+    -   The ZW MCP project files structured as per the repository (especially `zw_parser.py` accessible to Blender).
+
+2.  **Prepare Your Blender Scene:**
+    -   Open or create a scene in Blender.
+    -   If you want to export only specific objects, select them in Blender.
+    -   If you want to ensure ZW `TYPE` is accurately exported for objects previously imported from ZW, make sure they have the `ZW_TYPE` custom property (the importer, `blender_adapter.py`, would need to be updated to set this if not already doing so).
+
+3.  **Run from Command Line:**
+    Open your terminal or command prompt, navigate to the root directory of the ZW MCP project, and execute:
+    ```bash
+    blender --background --python zw_mcp/blender_exporter.py -- --output path/to/your/exported_scene.zw
+    ```
+    -   `--background`: Runs Blender without the UI.
+    -   `--python zw_mcp/blender_exporter.py`: Specifies the script to run.
+    -   `--`: This special separator indicates that subsequent arguments are for the Python script, not for Blender itself.
+    -   `--output <filepath>`: **(Required)** Specifies the path (including filename, e.g., `my_export.zw`) where the generated ZW text will be saved.
+    -   `--all`: **(Optional)** If this flag is included, all mesh objects in the current scene will be exported. If omitted, only currently selected mesh objects will be exported.
+
+    **Example exporting all mesh objects:**
+    ```bash
+    blender --background --python zw_mcp/blender_exporter.py -- --output exports/scene_dump.zw --all
+    ```
+
+4.  **Output:**
+    -   A `.zw` file will be created at the specified output path, containing the ZW representation of the exported Blender objects.
+    -   The console output from Blender (visible if not fully backgrounded or if logged) will show progress and any error messages from the script.
+
+### Example of Exported ZW (Flat Structure):
+
+```zw
+# Exported from Blender by ZW Exporter v0.1
+# --- Object Start ---
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: MyCube
+  LOCATION: (1.0, 2.0, 3.0)
+  SCALE: (1.0, 1.0, 1.0)
+  ROTATION: (0.0, 0.0, 0.785) // Radians
+  MATERIAL: RedMaterial
+  COLOR: "#FF0000"
+  COLLECTION: MainProps
+///
+# --- Object Start ---
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: MySphere
+  LOCATION: (-2.0, 0.5, 1.0)
+  SCALE: (0.5, 0.5, 0.5)
+  ROTATION: (0.0, 0.0, 0.0)
+  PARENT: MyCube
+  MATERIAL: BlueMaterial
+  COLOR: "#0000FF"
+  COLLECTION: MainProps
+///
+// ... more objects ...
+```
+*(Note: The exact separator between objects might vary slightly based on `to_zw` and how blocks are joined, but it will be a sequence of ZW-OBJECT definitions).*
+
+This initial version of the ZW exporter provides a vital link for bringing Blender scene information back into the ZW ecosystem, paving the way for more advanced features like scene comparison, delta generation, or AI-assisted refinement of human-made Blender scenes via ZW.
+
 ### How to Use the Blender Adapter:
 
 1.  **Prerequisites:**
