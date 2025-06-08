@@ -511,14 +511,149 @@ This phase bridges the ZW protocol with 3D content creation by introducing an ad
 -   **Functionality:**
     -   **ZW Input:** Reads a designated `.zw` file (e.g., `zw_mcp/prompts/blender_scene.zw`) containing scene descriptions.
     -   **Parsing:** Utilizes `zw_parser.parse_zw()` to convert the ZW text into a Python dictionary.
-    -   **ZW-to-bpy Mapping:** Implements a function (`handle_zw_object_creation`) that maps specific ZW commands (primarily `ZW-OBJECT: <Type>`) to Blender object creation operations (`bpy.ops.mesh.primitive_..._add()`).
-    -   **Recursive Processing:** Traverses the parsed ZW dictionary, allowing for nested structures (though initial object creation is typically based on direct `ZW-OBJECT` values).
--   **Initial Supported Objects:**
-    -   Cube (`ZW-OBJECT: Cube`)
-    -   Sphere (`ZW-OBJECT: Sphere`)
-    -   Plane (`ZW-OBJECT: Plane`)
-    -   Cone (`ZW-OBJECT: Cone`)
-    *(The adapter can be extended to support more object types, properties like location, scale, rotation, materials, and more complex ZW command structures).*
+    -   **ZW-to-bpy Mapping:** The `handle_zw_object_creation` function now processes a dictionary of attributes for each `ZW-OBJECT`. It extracts `TYPE`, `NAME`, `LOCATION`, and `SCALE`. `LOCATION` and `SCALE` string values (e.g., `"(1,2,3)"`) are parsed into tuples. These attributes are then used to create and configure Blender objects via `bpy.ops.mesh.primitive_..._add()` and by setting object properties.
+    -   **Recursive Processing:** Traverses the parsed ZW dictionary, allowing for nested structures. It identifies ZW object definitions (both simple `ZW-OBJECT: <Type>` and more complex `ZW-OBJECT:\n  TYPE: <Type>\n  ...attributes`) and passes the necessary attribute dictionary to `handle_zw_object_creation`.
+-   **Supported ZW Object Definition:**
+    -   `ZW-OBJECT` can be defined simply (e.g., `ZW-OBJECT: Sphere`) or with attributes:
+        ```zw
+        ZW-OBJECT:
+          TYPE: <TypeName>       // e.g., Cube, Sphere, Plane, Cone
+          NAME: <ObjectNameString> // e.g., MyCube
+          LOCATION: "(x, y, z)"  // e.g., "(1.0, -2.5, 0.0)"
+          SCALE: "(sx, sy, sz)" // e.g., "(1, 1, 1)" or "2.0" (uniform)
+        // Other attributes like MATERIAL might be present but not yet processed.
+        ```
+    -   **Core Supported Attributes:**
+        -   `TYPE: <TypeName>` (e.g., Cube, Sphere, Plane, Cone)
+        -   `NAME: <ObjectNameString>`
+        -   `LOCATION: "(x, y, z)"` (string representation of a 3-tuple)
+        -   `SCALE: "(sx, sy, sz)"` or `"s"` (string representation of a 3-tuple or a single float for uniform scaling)
+    -   `LOCATION` is used at creation time. `NAME` and `SCALE` are applied to the newly created object.
+    *(The adapter can be extended to support more object types, properties like rotation, materials, and more complex ZW command structures).*
+
+### Phase 6.2: Object Parenting and Hierarchies with `CHILDREN`
+
+To create structured scenes with parent-child relationships between objects, the ZW protocol now supports a `CHILDREN` key within a `ZW-OBJECT` definition. This allows for building complex hierarchies directly from ZW input.
+
+#### ZW Syntax for Parenting:
+
+The `CHILDREN` key expects a list of ZW-OBJECT definitions. Each object defined within this list will be parented to the `ZW-OBJECT` that contains the `CHILDREN` key.
+
+**Example:**
+
+```zw
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ParentCube
+  LOCATION: (0, 0, 1)
+  SCALE: (2, 2, 0.5)
+  CHILDREN: // List of child objects
+    - ZW-OBJECT:
+        TYPE: Sphere
+        NAME: ChildSphere1
+        LOCATION: (0, 0, 0.75) // Location is world, parenting preserves this
+        SCALE: (0.4, 0.4, 0.4)
+    - ZW-OBJECT:
+        TYPE: Cone
+        NAME: ChildCone1
+        LOCATION: (0.8, 0, 0.5)
+        SCALE: (0.1, 0.1, 0.8)
+        CHILDREN: // Grandchildren are possible
+          - ZW-OBJECT:
+              TYPE: Sphere
+              NAME: GrandChildSphere
+              LOCATION: (0,0,0.4)
+              SCALE: (0.05,0.05,0.05)
+///
+
+// Another top-level object (not part of the hierarchy above)
+ZW-OBJECT:
+  TYPE: Plane
+  NAME: Ground
+  SCALE: (10,10,1)
+///
+```
+
+#### How it Works in `blender_adapter.py`:
+
+-   When `process_zw_structure` encounters a `ZW-OBJECT`, it creates that object first.
+-   If that ZW-OBJECT's definition includes a `CHILDREN` key (which must be a list):
+    -   The adapter iterates through each item in the `CHILDREN` list. Each item is itself expected to be a `ZW-OBJECT` definition (i.e., a dictionary containing a `ZW-OBJECT` key whose value is the child's own attribute dictionary).
+    -   For each child ZW-OBJECT definition, `process_zw_structure` is called recursively.
+    -   Crucially, the newly created parent Blender object is passed as the `parent_bpy_obj` argument to these recursive calls.
+-   The `handle_zw_object_creation` function, when it receives a `parent_bpy_obj`, sets the newly created Blender object's parent to `parent_bpy_obj` using `bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)`. This ensures the child object maintains its specified world location, rotation, and scale at the moment of parenting.
+
+#### Result in Blender:
+
+-   Objects defined under a `CHILDREN` key will appear nested under their parent object in Blender's Outliner.
+-   Transforming the parent object (moving, rotating, scaling) will correspondingly affect all its child objects.
+
+This feature is essential for creating complex, articulated models, organizing scenes logically, and enabling more sophisticated procedural generation directly from ZW descriptions.
+
+### Phase 6.3: Materials and Appearance
+
+This enhancement allows ZW definitions to specify visual properties for objects, including material names, colors, shading types, and detailed shader parameters using Blender's Principled BSDF shader.
+
+#### ZW Syntax for Materials and Appearance:
+
+These attributes are added within a `ZW-OBJECT` definition:
+
+```zw
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: SampleMaterialBox
+  LOCATION: (0, 0, 1)
+  // ... other attributes like SCALE, CHILDREN ...
+  MATERIAL: MyCustomMaterial  // A name for the material
+  COLOR: "#FF6347"           // Tomato color (hex)
+  SHADING: Smooth             // "Smooth" or "Flat"
+  BSDF:                     // Detailed Principled BSDF parameters
+    METALLIC: 0.8
+    ROUGHNESS: 0.25
+    SPECULAR: 0.6
+    ALPHA: 0.9             // For transparency
+    // Add other Principled BSDF inputs here, e.g., Base_Color, Emission_Color, etc.
+///
+```
+
+#### Attribute Breakdown:
+
+-   **`MATERIAL: <String>`**
+    -   Provides a name for the Blender material (e.g., "ShinyMetal", "CharacterSkin").
+    -   If a material with this name exists, the adapter may try to use/update it (current behavior is to create if not exact name match, or use if exact match). If not specified, a name is generated (e.g., `ObjectName_Mat`).
+
+-   **`COLOR: "<#RRGGBB>" | "(R,G,B)" | "(R,G,B,A)"`**
+    -   Sets the base color of the object's material.
+    -   Accepts a hex string (e.g., `"#FF4500"`) or a string representation of an RGB or RGBA tuple (e.g., `"(0.8, 0.2, 0.1)"` or `"(0.8, 0.2, 0.1, 1.0)"`). Values should be 0-1 for tuples.
+    -   The adapter includes a `parse_color()` function to handle these formats.
+
+-   **`SHADING: Smooth | Flat`**
+    -   Determines the object's mesh shading.
+    -   `"Smooth"` results in `bpy.ops.object.shade_smooth()`.
+    -   `"Flat"` results in `bpy.ops.object.shade_flat()`. Defaults to "Smooth" if not specified.
+
+-   **`BSDF: { <PropertyName>: <Value>, ... }`**
+    -   A dictionary block allowing direct control over Blender's Principled BSDF shader inputs.
+    -   `<PropertyName>` should correspond to valid input names on the Principled BSDF node (e.g., `METALLIC`, `ROUGHNESS`, `SPECULAR`, `ALPHA`, `Base_Color` - note space for "Base Color"). ZW keys are typically converted (e.g., `BASE_COLOR` to "Base Color").
+    -   `<Value>` is usually a float, but colors can also be set here (e.g., `Base_Color: "(1,0,0,1)"`).
+
+#### Attribute Precedence for Material Application:
+
+The `blender_adapter.py` applies these attributes with the following precedence to define the material:
+1.  **`BSDF` properties**: If a `BSDF` block is provided, its settings (including any "Base Color" set within it) take highest precedence for controlling the Principled BSDF shader.
+2.  **`COLOR` attribute**: If a `COLOR` attribute is specified outside the `BSDF` block, it will set the "Base Color" of the Principled BSDF, *unless* the "Base Color" was already set by a `Base_Color` key within the `BSDF` block.
+3.  **`MATERIAL` name**: This is used to name the material in Blender. If neither `BSDF` nor `COLOR` provides color information, a default material with this name is created.
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `handle_zw_object_creation` function in `blender_adapter.py` is responsible for processing these attributes.
+-   It retrieves or creates a Blender material.
+-   It ensures the material uses nodes and accesses the Principled BSDF shader node.
+-   It then applies the `BSDF` dictionary values directly to the shader inputs.
+-   If applicable, it sets the "Base Color" from the `COLOR` attribute.
+-   Finally, it assigns the configured material to the object and applies the specified `SHADING`.
+
+This system allows for a flexible range of visual definitions, from simple named materials or colored objects to finely tuned PBR (Physically Based Rendering) appearances via the BSDF properties.
 
 ### How to Use the Blender Adapter:
 
@@ -529,10 +664,17 @@ This phase bridges the ZW protocol with 3D content creation by introducing an ad
 2.  **Prepare ZW Input:**
     -   Create or edit a `.zw` file with scene instructions. An example is provided at `zw_mcp/prompts/blender_scene.zw`.
         ```zw
-        // Example from blender_scene.zw
-        ZW-OBJECT: Sphere
+        // Example ZW for blender_adapter.py
+        ZW-OBJECT:
+          TYPE: Cube
+          NAME: ControlCube
+          LOCATION: (1, 2, 3)
+          SCALE: (1.0, 2.0, 0.5)
         ///
-        ZW-OBJECT: Cube
+        ZW-OBJECT:
+          TYPE: Sphere
+          NAME: Orbiter
+          LOCATION: (-2, 0, 5)
         ///
         ```
 

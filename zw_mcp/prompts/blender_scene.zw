@@ -3,33 +3,143 @@ ZW-SCENE_SETUP:
   LIGHTING: StandardStudio
 ///
 
+// Simple object definitions (for backward compatibility testing)
 ZW-OBJECT: Sphere
-  NAME: CentralStar
-  SCALE: 2.0
-  MATERIAL: EmissiveGold
+  NAME: SimpleSphere // Give it a name for easier identification
 ///
-
-ZW-OBJECT: Cube
-  NAME: SupportBlock1
-  LOCATION: X=5, Y=0, Z=0
-  ROTATION: Z=45
-  MATERIAL: MatteGray
-///
-
 ZW-OBJECT: Plane
-  NAME: GroundPlane
-  SCALE: X=20, Y=20, Z=1
-  MATERIAL: TexturedRock
+  NAME: SimplePlane // Give it a name
+///
+
+// Object with detailed transform attributes
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ShrineBase
+  LOCATION: (2, 1, -3)
+  SCALE: (1.5, 1.5, 0.5)
+///
+
+ZW-OBJECT:
+  TYPE: Cone
+  NAME: PointyTop
+  LOCATION: (-2, -2, 1)
+  SCALE: (0.5, 0.5, 2.0)
+///
+
+// --- NEW MATERIAL AND APPEARANCE EXAMPLES ---
+
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ShinyRedCube
+  LOCATION: (-4, 0, 1)
+  SCALE: (1, 1, 1)
+  MATERIAL: ShinyRedPlastic // Name hint for material
+  COLOR: "#FF0000"         // Red
+  SHADING: Smooth
+  BSDF:
+    METALLIC: 0.2
+    ROUGHNESS: 0.1
+    SPECULAR: 0.7
+///
+
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: MatteBlueSphere
+  LOCATION: (-4, 2, 1)
+  SCALE: (0.8, 0.8, 0.8)
+  MATERIAL: MatteBluePaint
+  COLOR: "(0.1, 0.2, 0.8, 1.0)" // Blue with Alpha (RGBA tuple string)
+  SHADING: Smooth
+  BSDF:
+    ROUGHNESS: 0.8
+///
+
+ZW-OBJECT:
+  TYPE: Cone
+  NAME: MetallicGoldCone
+  LOCATION: (-4, -2, 1)
+  SCALE: (1,1,1) // Added scale for consistency
+  MATERIAL: PolishedGold
+  BSDF:
+    METALLIC: 1.0
+    ROUGHNESS: 0.2
+  COLOR: "#FFD700" // Gold-like color
+  SHADING: Flat
+///
+
+ZW-OBJECT: // Test MATERIAL name only
+  TYPE: Plane
+  NAME: SimpleMaterialPlane
+  LOCATION: (0, -5, 0)
+  SCALE: (3,3,1)
+  MATERIAL: GroundMaterial // Adapter should create a default material with this name
+///
+
+ZW-OBJECT: // Test COLOR only
+  TYPE: Cube
+  NAME: ColorOnlyCube
+  LOCATION: (2, -5, 1)
+  COLOR: "#00FF00" // Green
+  SHADING: Smooth
+///
+
+// Example demonstrating parenting with materials
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: ParentMaterialBox
+  LOCATION: (5, 5, 1)
+  MATERIAL: ParentBoxMat
+  COLOR: "(0.5, 0.5, 0.5, 1.0)" // Gray
+  CHILDREN:
+    - ZW-OBJECT:
+        TYPE: Sphere
+        NAME: ChildShinySphere
+        LOCATION: (5,5,2) // Using world coordinates for now, parenting adjusts
+        SCALE: (0.5,0.5,0.5)
+        MATERIAL: ShinyChildMat
+        BSDF:
+            METALLIC: 0.9
+            ROUGHNESS: 0.05
+        COLOR: "#FFFFFF" // White
+        SHADING: Smooth
+///
+
+// Object with CHILDREN demonstrating hierarchy (from previous step)
+ZW-OBJECT: // Parent Object
+  TYPE: Cube
+  NAME: CommandConsole
+  LOCATION: (0, 0, 1)
+  SCALE: (2, 1, 0.5)
+  CHILDREN:
+    - ZW-OBJECT: // First Child
+        TYPE: Sphere
+        NAME: HoloDisplay
+        LOCATION: (0, 0, 1.75) // Adjusted world location
+        SCALE: (0.4, 0.4, 0.4)
+        MATERIAL: GlowingBlue
+    - ZW-OBJECT: // Second Child
+        TYPE: Cone
+        NAME: Antenna
+        LOCATION: (0.8, 0, 1.5) // Adjusted world location
+        SCALE: (0.1, 0.1, 0.8)
+        CHILDREN: // Grandchild
+          - ZW-OBJECT:
+              TYPE: Sphere
+              NAME: AntennaTipLight
+              LOCATION: (0.8,0,2.3) // Adjusted world location
+              SCALE: (0.05,0.05,0.05)
+              MATERIAL: EmissiveRed
 ///
 
 ZW-NESTED-DETAILS:
-  PARENT: SupportBlock1
-  ZW-OBJECT: Cone
-    NAME: SpireTop
-    LOCATION: X=0, Y=0, Z=1.5
-    SCALE: X=0.5, Y=0.5, Z=1.0
+  PARENT: ShrineBase
+  ZW-OBJECT:
+    TYPE: Sphere
+    NAME: NestedOrbUnderDetails
+    LOCATION: (2, 1, -1.5) // Adjusted world location
+    SCALE: (0.2, 0.2, 0.2)
     MATERIAL: PolishedSilver
 ///
 
-NOTE: This is a more complex scene example. The blender_adapter will initially only handle ZW-OBJECT types directly under the root or a ZW-NESTED-DETAILS (though the current adapter only processes ZW-OBJECT at any level).
+NOTE: This scene includes simple objects, objects with attributes (NAME, LOCATION, SCALE), material/appearance attributes (MATERIAL, COLOR, SHADING, BSDF), objects with CHILDREN for hierarchy, and a ZW-NESTED-DETAILS block. The adapter will be enhanced to process these attributes and establish parent-child relationships.
 ///
