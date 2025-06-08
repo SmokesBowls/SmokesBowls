@@ -123,13 +123,77 @@ def append_to_memory(memory_path_str: str, round_num: int, prompt: str, response
     except Exception as e:
         print(f"[!] Error writing to memory file '{memory_file}': {e}")
 
+def build_composite_prompt(seed_prompt_text: str, memory_path_str: str, limit: int, style: str) -> str:
+    memory_history = []
+    if memory_path_str:
+        memory_file = Path(memory_path_str)
+        if memory_file.exists() and memory_file.stat().st_size > 0:
+            try:
+                with open(memory_file, "r", encoding="utf-8") as f:
+                    loaded_memory = json.load(f)
+                if isinstance(loaded_memory, list):
+                    memory_history = loaded_memory
+                else:
+                    print(f"[!] Warning: Memory file '{memory_file}' did not contain a list. Ignoring memory.")
+            except json.JSONDecodeError:
+                print(f"[!] Warning: Could not decode JSON from memory file '{memory_file}'. Ignoring memory.")
+            except Exception as e:
+                print(f"[!] Error reading memory file '{memory_file}': {e}. Ignoring memory.")
+
+    limit = max(0, limit)
+    recent_memory_entries = memory_history[-limit:]
+
+    memory_block_parts = []
+    for entry in recent_memory_entries:
+        response_text = entry.get("response")
+        if isinstance(response_text, str):
+            memory_block_parts.append(response_text.strip().rstrip("///").strip())
+        elif response_text is not None:
+            print(f"[!] Warning: Non-string response in memory: {type(response_text)}. Skipping.")
+
+    composite_parts = []
+    if style and style.strip():
+        composite_parts.append(f"ZW-AGENT-STYLE:\n  ROLE: {style.strip()}\n///")
+
+    if memory_block_parts:
+        memory_seed_content = "\n///\n".join(memory_block_parts)
+        if memory_seed_content: # Only add if there's actual content after stripping/joining
+             composite_parts.append(f"ZW-MEMORY-SEED:\n{memory_seed_content}\n///")
+
+    cleaned_seed_prompt = seed_prompt_text.strip().rstrip("///").strip()
+    if cleaned_seed_prompt: # Only add if there's actual seed prompt content
+        composite_parts.append(cleaned_seed_prompt)
+
+    if not composite_parts:
+        return "///" # Minimal valid ZW prompt if everything is empty
+
+    final_composite_prompt = "\n".join(composite_parts)
+
+    if not final_composite_prompt.endswith("///"):
+        final_composite_prompt += "\n///"
+
+    return final_composite_prompt
+
 def main():
     try:
         config = load_config()
-        current_prompt = load_initial_prompt(config["prompt_path"])
+        seed_prompt_text = load_initial_prompt(config["prompt_path"])
     except Exception:
         print("[!] Agent cannot continue due to configuration or initial prompt loading errors.")
         return
+
+    # current_prompt will be used to start the loop
+    if config.get("use_memory_seed", False):
+        print("[*] Memory seeding is enabled. Building composite prompt...")
+        current_prompt = build_composite_prompt(
+            seed_prompt_text,
+            config.get("memory_path"),
+            config.get("memory_limit", 3),
+            config.get("style", "")
+        )
+    else:
+        print("[*] Memory seeding is disabled. Using initial prompt directly.")
+        current_prompt = seed_prompt_text
 
     host = config["host"]
     port = config["port"]
@@ -179,6 +243,7 @@ def main():
             # The user's code for this `else` was `prompt = response` which is same as `prepend_previous_response=True`
             # I will clarify this in the README. For now, if not prepending, it will send the *original* initial prompt.
             print("[*] Prepending response is disabled. Reusing initial prompt for next round (if any).")
+            # Need to use the original seed_prompt_text, not potentially composite one
             current_prompt = load_initial_prompt(config["prompt_path"])
 
 

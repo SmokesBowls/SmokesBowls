@@ -7,5 +7,8 @@
   "log_path": "zw_mcp/logs/agent.log",
   "memory_enabled": true,
   "memory_path": "zw_mcp/logs/memory.json",
-  "prepend_previous_response": true
+  "prepend_previous_response": true,
+  "style": "You are a prophetic narrator, speaking only in structured ZW format.",
+  "use_memory_seed": true,
+  "memory_limit": 3
 }

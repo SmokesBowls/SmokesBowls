@@ -267,3 +267,66 @@ zw_mcp/
 
 This looping agent with memory provides a more powerful way to conduct extended, evolving interactions with Ollama.
 ```
+
+---
+## Phase 2.6: Memory-Driven Agent Personality
+
+This step further refines the ZW Autonomous Agent by allowing its initial prompt to be dynamically constructed based on a defined **style** and a **seed of recent memories**. This gives the agent a configurable persona and immediate historical context for the start of its conversation.
+
+#### Key Functional Changes in `ollama_agent.py` for Personality:
+
+- **Composite Initial Prompt:** If `use_memory_seed` is enabled in `agent_config.json`, the agent no longer uses the `prompt_path` content directly as the first prompt. Instead, it calls a new internal function, `build_composite_prompt()`.
+- **`build_composite_prompt()` Function:**
+    - Takes the original seed prompt (from `prompt_path`), the `memory_path`, `memory_limit`, and `style` string from the configuration.
+    - Constructs a new initial prompt by prepending:
+        1.  A `ZW-AGENT-STYLE` block containing the `style` text.
+        2.  A `ZW-MEMORY-SEED` block containing a concatenation of the most recent responses from memory (up to `memory_limit`).
+    - The original seed prompt is appended after these blocks.
+    - This composite prompt is then used for the **first round** of the agent's conversation.
+- **Subsequent Rounds:** The logic for subsequent rounds (i.e., how `current_prompt` is updated based on `prepend_previous_response`) remains the same as in Step 2. The personality and memory seeding only affect the very first prompt of a session.
+
+#### New Configuration Fields in `agent_config.json` for Personality:
+
+- **`"style": "You are a prophetic narrator, speaking only in structured ZW format."`**
+  - A string that defines the persona, role, or specific instructions for the agent. This is injected into the initial prompt.
+- **`"use_memory_seed": true`**
+  - A boolean. If `true`, the agent will use the `build_composite_prompt()` logic to prepend style and recent memories to the initial seed prompt. If `false`, the agent uses the `prompt_path` content directly as the initial prompt (as in Step 2 before this change).
+- **`"memory_limit": 3`**
+  - An integer specifying how many of the most recent entries from `memory.json` should be included in the `ZW-MEMORY-SEED` block when `use_memory_seed` is true.
+
+#### Updated `agent_config.json` Example (Showing All Fields):
+```json
+{
+  "prompt_path": "zw_mcp/prompts/example.zw",
+  "host": "127.0.0.1",
+  "port": 7421,
+  "max_rounds": 5,
+  "stop_keywords": ["END_SCENE", "///"],
+  "log_path": "zw_mcp/logs/agent.log",
+  "memory_enabled": true,
+  "memory_path": "zw_mcp/logs/memory.json",
+  "prepend_previous_response": true,
+  "style": "You are a prophetic narrator, speaking only in structured ZW format.",
+  "use_memory_seed": true,
+  "memory_limit": 3
+}
+```
+
+#### How to Use the Agent with Personality:
+
+1.  **Ensure the ZW MCP Daemon is running** (as per previous steps).
+2.  **Configure the Agent:**
+    - Edit `zw_mcp/agent_config.json`. Pay special attention to `style`, `use_memory_seed`, and `memory_limit` to control the initial prompt's personality.
+    - Ensure `memory_path` points to a valid memory file if `use_memory_seed` is true and you expect past memories to be loaded.
+3.  **Run the Autonomous Agent:**
+    ```bash
+    python3 zw_mcp/ollama_agent.py
+    ```
+4.  **Expected Output & Behavior:**
+    - If `use_memory_seed` is true, the **very first prompt** sent to Ollama (and logged in `agent.log`) will be a composite prompt including the style directive, recent memory responses, and the original seed prompt.
+    - Subsequent prompts within the same session follow the `prepend_previous_response` logic as before.
+    - Ollama's responses should ideally reflect the injected style and be influenced by the seeded memories.
+    - All other logging (`agent.log`, `memory.json`) and loop behaviors (`max_rounds`, `stop_keywords`) remain as in Step 2.
+
+This memory-driven personality makes the agent's initial interaction more contextually aware and stylistically aligned, setting a better stage for the ensuing conversation.
+```
