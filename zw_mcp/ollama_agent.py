@@ -4,21 +4,28 @@ import json
 from pathlib import Path
 from datetime import datetime # Added for logging timestamp consistency
 
-CONFIG_PATH = Path("zw_mcp/agent_config.json")
+CONFIG_PATH = Path("zw_mcp/agent_config.json") # Default config path for standalone runs
 BUFFER_SIZE = 4096 # Consistent with other scripts
 
-def load_config():
+def load_config(config_file_path_str: str = None): # Added optional argument
+    target_path = None
+    if config_file_path_str:
+        target_path = Path(config_file_path_str)
+    else:
+        target_path = CONFIG_PATH # Fallback to global default
+
     try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        print(f"[*] Loading agent configuration from: {target_path.resolve()}") # Added print
+        with open(target_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"[!] Error: Agent configuration file not found at '{CONFIG_PATH}'")
+        print(f"[!] Error: Agent configuration file not found at '{target_path}'")
         raise
     except json.JSONDecodeError:
-        print(f"[!] Error: Could not decode JSON from '{CONFIG_PATH}'")
+        print(f"[!] Error: Could not decode JSON from '{target_path}'")
         raise
     except Exception as e:
-        print(f"[!] Error loading agent configuration: {e}")
+        print(f"[!] Error loading agent configuration from '{target_path}': {e}")
         raise
 
 def load_initial_prompt(path_str: str) -> str: # Renamed for clarity

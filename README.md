@@ -380,3 +380,122 @@ This script will output the results of parsing, prettifying, and reconstructing 
 
 This parser is a key component for building more complex and reliable ZW-based applications. Future enhancements could include more detailed error reporting with line numbers, schema validation against predefined ZW structures, and more sophisticated list handling.
 ```
+
+---
+## Phase 5: Multi-Agent Control Framework
+
+This phase introduces a sophisticated multi-agent orchestration system, enabling multiple ZW-speaking agents, each with unique configurations, styles, and memory, to collaborate or hand off tasks in a sequential manner. All inter-agent communication is facilitated through the existing TCP daemon (`zw_mcp_daemon.py`).
+
+### Core Components:
+
+-   **`zw_mcp/zw_agent_hub.py` (Orchestrator):**
+    -   The central script that manages the multi-agent sessions.
+    -   Reads `zw_mcp/agent_profiles.json` to determine the sequence and configuration of agents to run.
+    -   Initiates the process with a "master seed" prompt (`zw_mcp/prompts/master_seed.zw`).
+    -   Runs each defined agent sequentially:
+        -   The output from one agent becomes the initial input prompt for the next agent in the chain.
+        -   Each agent session (which can include multiple internal rounds per agent) is managed by a reusable `run_single_agent_session` function within the hub. This function leverages the core logic from `ollama_agent.py` (e.g., for memory seeding, style application, internal looping, logging, and memory persistence for that specific agent).
+    -   Prints status updates and the final output of the entire agent chain.
+
+-   **`zw_mcp/agent_profiles.json` (Agent Definitions):**
+    -   A JSON file that lists all available agents and points to their individual configuration files.
+    -   **Example Structure:**
+        ```json
+        [
+          {
+            "name": "Narrator",
+            "config": "zw_mcp/agents/narrator_config.json"
+          },
+          {
+            "name": "Historian",
+            "config": "zw_mcp/agents/historian_config.json"
+          }
+        ]
+        ```
+
+-   **`zw_mcp/agents/` (Directory for Individual Agent Configs):**
+    -   This directory holds separate JSON configuration files for each agent (e.g., `narrator_config.json`, `historian_config.json`).
+    -   Each configuration file follows the same format as the main `zw_mcp/agent_config.json` used by the standalone `ollama_agent.py`, allowing for unique settings per agent:
+        -   `prompt_path`: Path to the agent's own initial seed prompt (used if not prepending or for its very first internal round if `prepend_previous_response` is false).
+        -   `style`: Specific persona/role for this agent.
+        -   `max_rounds`: How many internal loops this agent performs.
+        -   `stop_keywords`: Words that will stop this agent's internal loop.
+        -   `log_path`: Path to this agent's specific log file (e.g., in `zw_mcp/agent_runtime/`).
+        -   `memory_enabled`, `memory_path`: Settings for this agent's specific memory.
+        -   `use_memory_seed`, `memory_limit`: For this agent's initial prompt construction using its own memory.
+        -   `prepend_previous_response`: Governs how this agent forms its own subsequent internal prompts.
+
+-   **`zw_mcp/prompts/` (Directory for Seed Prompts):**
+    -   Contains the initial seed prompts for each agent (e.g., `narrator_seed.zw`, `historian_seed.zw`) and the `master_seed.zw` for the hub.
+
+-   **`zw_mcp/agent_runtime/` (Directory for Agent-Specific Outputs - Created Dynamically):**
+    -   This directory is where individual agents will store their log files and memory files, as specified in their respective configuration files (e.g., `narrator.log`, `narrator_memory.json`).
+    -   The directory and files are created when the agents run and logging/memory is enabled.
+
+### How to Run the Multi-Agent Hub:
+
+1.  **Ensure the ZW MCP Daemon is running:**
+    The daemon acts as the communication layer for all agents.
+    ```bash
+    python3 zw_mcp/zw_mcp_daemon.py
+    ```
+
+2.  **Prepare Agent Configurations and Prompts:**
+    -   Define your agents and their config paths in `zw_mcp/agent_profiles.json`.
+    -   Create/edit the individual agent JSON config files in `zw_mcp/agents/`.
+    -   Create/edit the corresponding seed prompt `.zw` files in `zw_mcp/prompts/`.
+    -   Ensure the `master_seed.zw` in `zw_mcp/prompts/` contains the desired starting prompt for the entire chain.
+
+3.  **Run the Agent Hub:**
+    In a separate terminal (while the daemon is running):
+    ```bash
+    python3 zw_mcp/zw_agent_hub.py
+    ```
+
+4.  **Expected Behavior:**
+    -   The hub will load `agent_profiles.json`.
+    -   It will start with `master_seed.zw` as the input for the first agent.
+    -   Each agent in the profile list will run sequentially.
+        -   The console will show which agent is running and its interactions (prompts/responses for its internal rounds).
+        -   Each agent will create/update its own log and memory files in `zw_mcp/agent_runtime/` as per its configuration.
+    -   The final output from one agent is passed as the initial input prompt to the next agent.
+    -   The hub will print the final output from the last agent in the chain upon completion.
+
+### Updated Directory Structure (Illustrative for Phase 5):
+
+```
+zw_mcp/
+├── agent_profiles.json       # NEW: Defines the sequence of agents
+├── agents/                   # NEW: Directory for individual agent configs
+│   ├── narrator_config.json
+│   └── historian_config.json
+├── agent_runtime/            # NEW (created dynamically): For per-agent logs & memory
+│   ├── narrator.log
+│   ├── narrator_memory.json
+│   ├── historian.log
+│   └── historian_memory.json
+├── zw_agent_hub.py         # NEW: Orchestrator for multi-agent sessions
+├── ollama_agent.py         # Core single-agent logic (used by the hub)
+├── agent_config.json       # Default config for standalone ollama_agent.py
+├── zw_mcp_daemon.py        # TCP Daemon server
+├── client_example.py       # Example TCP client
+├── zw_mcp_server.py        # Original CLI tool
+├── ollama_handler.py       # Handles API requests to Ollama
+├── zw_parser.py            # ZW parsing utilities
+├── test_zw_parser.py       # Tests for zw_parser
+├── prompts/
+│   ├── example.zw
+│   ├── master_seed.zw        # NEW: Initial prompt for the agent hub
+│   ├── narrator_seed.zw    # NEW: Seed for Narrator agent
+│   └── historian_seed.zw   # NEW: Seed for Historian agent
+├── responses/
+│   └──                     # Directory for saved CLI responses (zw_mcp_server.py)
+└── logs/
+    ├── agent.log           # Log for standalone ollama_agent.py
+    ├── daemon.log          # Log for TCP daemon interactions
+    ├── memory.json         # Memory for standalone ollama_agent.py
+    └── session.log         # Log for CLI tool interactions (zw_mcp_server.py)
+```
+
+This multi-agent framework allows for the creation of complex, collaborative narrative simulations or problem-solving dialogues between different AI personas.
+```
