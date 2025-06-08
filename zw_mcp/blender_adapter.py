@@ -112,36 +112,32 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
 
     obj_name = obj_attributes.get("NAME", obj_type) # Default name to type if not specified
 
-    # Location: default to (0,0,0)
     location_str = obj_attributes.get("LOCATION", "(0,0,0)")
     location_tuple = safe_eval(location_str, (0,0,0))
     if not isinstance(location_tuple, tuple) or len(location_tuple) != 3:
         print(f"    [!] Warning: Invalid LOCATION format '{location_str}'. Defaulting to (0,0,0).")
         location_tuple = (0,0,0)
 
-    # Scale: default to (1,1,1)
     scale_str = obj_attributes.get("SCALE", "(1,1,1)")
-    # Handle single number scale as well as tuple
-    if isinstance(scale_str, (int, float)): # Direct number like SCALE: 2.0
+    if isinstance(scale_str, (int, float)):
         scale_tuple = (float(scale_str), float(scale_str), float(scale_str))
-    elif isinstance(scale_str, str): # String like SCALE: "(1,1,1)" or SCALE: "2.0"
+    elif isinstance(scale_str, str):
         evaluated_scale = safe_eval(scale_str, (1,1,1))
         if isinstance(evaluated_scale, (int, float)):
             scale_tuple = (float(evaluated_scale), float(evaluated_scale), float(evaluated_scale))
         elif isinstance(evaluated_scale, tuple) and len(evaluated_scale) == 3:
             scale_tuple = evaluated_scale
-        else: # Default if malformed tuple string
+        else:
             print(f"    [!] Warning: Invalid SCALE format '{scale_str}'. Defaulting to (1,1,1).")
             scale_tuple = (1,1,1)
-    else: # Default if not string or number
+    else:
         print(f"    [!] Warning: Invalid SCALE type '{type(scale_str)}'. Defaulting to (1,1,1).")
         scale_tuple = (1,1,1)
-
 
     print(f"[*] Creating Blender object: TYPE='{obj_type}', NAME='{obj_name}', LOC={location_tuple}, SCALE={scale_tuple}")
 
     obj_type_lower = obj_type.lower()
-    created_bpy_obj = None # Renamed from created_obj for clarity
+    created_bpy_obj = None
 
     try:
         if obj_type_lower == "sphere":
@@ -167,53 +163,45 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
             print(f"    ✅ Created and configured: {created_bpy_obj.name} (Type: {obj_type})")
 
             if parent_bpy_obj:
-                # Deselect all, select child, then parent, then parent.
                 bpy.ops.object.select_all(action='DESELECT')
                 created_bpy_obj.select_set(True)
                 parent_bpy_obj.select_set(True)
-                bpy.context.view_layer.objects.active = parent_bpy_obj # Parent must be active
+                bpy.context.view_layer.objects.active = parent_bpy_obj
                 try:
-                    bpy.ops.object.parent_set(type='OBJECT', keep_transform=True) # Keep world transform then parent
+                    bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
                     print(f"    Parented '{created_bpy_obj.name}' to '{parent_bpy_obj.name}'")
                 except RuntimeError as e:
                     print(f"    [Error] Parenting failed for '{created_bpy_obj.name}' to '{parent_bpy_obj.name}': {e}")
 
-            # --- Material Handling ---
-            if hasattr(created_bpy_obj.data, 'materials'): # Check if object can have materials
+            if hasattr(created_bpy_obj.data, 'materials'):
                 material_name_str = obj_attributes.get("MATERIAL")
                 color_str = obj_attributes.get("COLOR")
-                shading_str = obj_attributes.get("SHADING", "Smooth").lower() # Default to Smooth
+                shading_str = obj_attributes.get("SHADING", "Smooth").lower()
                 bsdf_data = obj_attributes.get("BSDF")
-
-                obj_name_for_mat = created_bpy_obj.name # Use the actual object name for material default
+                obj_name_for_mat = created_bpy_obj.name
                 final_material_name = material_name_str or f"{obj_name_for_mat}_Mat"
-
                 mat = bpy.data.materials.get(final_material_name)
                 if not mat:
                     mat = bpy.data.materials.new(name=final_material_name)
                     print(f"    Created new material: {final_material_name}")
                 else:
                     print(f"    Using existing material: {final_material_name}")
-
                 mat.use_nodes = True
                 nodes = mat.node_tree.nodes
                 links = mat.node_tree.links
-
                 principled_bsdf = nodes.get("Principled BSDF")
                 if not principled_bsdf:
                     principled_bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
                     principled_bsdf.location = (0,0)
                     print(f"    Created Principled BSDF node for {final_material_name}")
-
                 material_output = nodes.get('Material Output')
                 if not material_output:
                     material_output = nodes.new(type='ShaderNodeOutputMaterial')
                     material_output.location = (200,0)
                     print(f"    Created Material Output node for {final_material_name}")
-
                 if principled_bsdf and material_output:
                     is_linked = False
-                    for link_item in links: # Renamed link to link_item to avoid conflict
+                    for link_item in links:
                         if link_item.from_node == principled_bsdf and link_item.from_socket == principled_bsdf.outputs.get("BSDF") and \
                            link_item.to_node == material_output and link_item.to_socket == material_output.inputs.get("Surface"):
                             is_linked = True
@@ -221,14 +209,12 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
                     if not is_linked:
                         links.new(principled_bsdf.outputs["BSDF"], material_output.inputs["Surface"])
                         print(f"    Linked Principled BSDF to Material Output for {final_material_name}")
-
                 base_color_set_by_bsdf = False
                 if isinstance(bsdf_data, dict) and principled_bsdf:
                     print(f"    Applying BSDF properties for {final_material_name}: {bsdf_data}")
                     for key, value_any_type in bsdf_data.items():
                         bsdf_input_name = key.replace("_", " ").title()
                         if key.lower() == "alpha": bsdf_input_name = "Alpha"
-
                         if principled_bsdf.inputs.get(bsdf_input_name):
                             try:
                                 if "Color" in bsdf_input_name and (isinstance(value_any_type, str) or isinstance(value_any_type, tuple)):
@@ -244,18 +230,15 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
                                 print(f"      [Warning] Failed to set BSDF input {bsdf_input_name} with value {value_any_type}: {e_bsdf}")
                         else:
                             print(f"      [Warning] BSDF input '{bsdf_input_name}' (from ZW key '{key}') not found on Principled BSDF node.")
-
                 if color_str and not base_color_set_by_bsdf and principled_bsdf:
-                    parsed_color_val = parse_color(color_str) # Renamed variable
+                    parsed_color_val = parse_color(color_str)
                     principled_bsdf.inputs["Base Color"].default_value = parsed_color_val
                     print(f"    Set Base Color to {parsed_color_val} for {final_material_name} (from COLOR attribute)")
-
                 if created_bpy_obj.data.materials:
                     created_bpy_obj.data.materials[0] = mat
                 else:
                     created_bpy_obj.data.materials.append(mat)
                 print(f"    Assigned material '{final_material_name}' to object '{created_bpy_obj.name}'")
-
                 bpy.ops.object.select_all(action='DESELECT')
                 created_bpy_obj.select_set(True)
                 bpy.context.view_layer.objects.active = created_bpy_obj
@@ -268,82 +251,53 @@ def handle_zw_object_creation(obj_attributes: dict, parent_bpy_obj=None):
         else:
             print(f"    [!] Error: Object creation did not result in an active object (Type: {obj_type}).")
             return None
-
     except Exception as e:
         print(f"    [!] Error creating Blender object for TYPE '{obj_type}', NAME '{obj_name}': {e}")
         return None
     return created_bpy_obj
 
 # --- Geometry Node Function Handlers ---
-
 def apply_array_gn(source_obj: bpy.types.Object, params: dict):
     if not bpy: return
     if source_obj is None:
         print("[!] ARRAY target object not found or provided. Skipping.")
         return
-
     print(f"[*] Applying ARRAY GN to create instances of '{source_obj.name}' with params: {params}")
-
     array_host_name = f"{source_obj.name}_ArrayResult"
-    array_host_obj = bpy.data.objects.new(array_host_name, None) # Empty object for GN
-
-    # Link to the same collection as the source object, or scene's master if source is not in one
+    array_host_obj = bpy.data.objects.new(array_host_name, None)
     source_collection = source_obj.users_collection[0] if source_obj.users_collection else bpy.context.scene.collection
     source_collection.objects.link(array_host_obj)
     print(f"    Created ARRAY host object '{array_host_name}' in collection '{source_collection.name}'")
-
     mod = array_host_obj.modifiers.new(name="ZW_Array", type='NODES')
     gn_tree_name = f"ZW_Array_{source_obj.name}_GN"
-
-    # Check if node group already exists, reuse if so, otherwise create
     if gn_tree_name in bpy.data.node_groups:
         node_group = bpy.data.node_groups[gn_tree_name]
         print(f"    Reusing existing Node Group: {gn_tree_name}")
     else:
         node_group = bpy.data.node_groups.new(name=gn_tree_name, type='GeometryNodeTree')
         print(f"    Created new Node Group: {gn_tree_name}")
-
         nodes = node_group.nodes
         links = node_group.links
-        nodes.clear() # Clear default nodes
-
+        nodes.clear()
         group_input = nodes.new(type='NodeGroupInput')
         group_input.location = (-400, 0)
         group_output = nodes.new(type='NodeGroupOutput')
         group_output.location = (400, 0)
-
-        # Define inputs/outputs for the group if needed (e.g. for dynamic params)
-        # For now, params are set directly on nodes.
-
         obj_info = nodes.new('GeometryNodeObjectInfo')
         obj_info.location = (-200, 200)
         obj_info.inputs['Object'].default_value = source_obj
-
         mesh_line = nodes.new('NodeGeometryMeshLine')
         mesh_line.location = (-200, -100)
         count = int(params.get("COUNT", 5))
-        offset_vec_str = params.get("OFFSET", "(0,0,1)") # Default offset changed to Z-axis for more visible pillar example
+        offset_vec_str = params.get("OFFSET", "(0,0,1)")
         offset_vec = safe_eval(offset_vec_str, (0,0,1))
-
-        mesh_line.mode = 'END_POINTS' # Use start and end points for offset
-        # For 'END_POINTS' mode with offset, we set 'Start Location' to (0,0,0) and 'End Location' to the total offset
-        # For a count of N items, there are N-1 segments for the offset.
-        # If offset is per item, total_offset = (count-1) * offset_vec IF offset is between items.
-        # Or, if offset is total length, and count is number of points:
-        # mesh_line.inputs['Start Location'].default_value = (0,0,0)
-        # mesh_line.inputs['Offset'].default_value = offset_vec # This makes it use the 'Offset' mode implicitly if count changes
-        # Let's use the direct 'Offset' mode which is simpler with count
         mesh_line.mode = 'OFFSET'
         mesh_line.inputs['Count'].default_value = count
         mesh_line.inputs['Offset'].default_value = offset_vec
-
-
         inst_on_pts = nodes.new('GeometryNodeInstanceOnPoints')
         inst_on_pts.location = (0, 0)
-
         links.new(mesh_line.outputs['Mesh'], inst_on_pts.inputs['Points'])
         links.new(obj_info.outputs['Geometry'], inst_on_pts.inputs['Instance'])
-
         if str(params.get("MODE", "INSTANCE")).upper() == "REALIZE":
             realize = nodes.new('GeometryNodeRealizeInstances')
             realize.location = (200, 0)
@@ -353,84 +307,59 @@ def apply_array_gn(source_obj: bpy.types.Object, params: dict):
         else:
             links.new(inst_on_pts.outputs['Instances'], group_output.inputs.new('NodeSocketGeometry', 'Geometry'))
             print("    Array set to INSTANCED instances.")
-
     mod.node_group = node_group
     bpy.context.view_layer.objects.active = array_host_obj
     array_host_obj.select_set(True)
     print(f"    Applied ARRAY to '{array_host_name}' using source '{source_obj.name}'")
-
 
 def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
     if not bpy: return
     if target_obj is None or target_obj.type != 'MESH':
         print(f"[!] DISPLACE_NOISE target object '{target_obj.name if target_obj else 'None'}' is not a MESH. Skipping.")
         return
-
     print(f"[*] Applying DISPLACE_NOISE GN to '{target_obj.name}' with params: {params}")
-
     mod = target_obj.modifiers.new(name="ZW_DisplaceNoise", type='NODES')
     gn_tree_name = f"ZW_Displace_{target_obj.name}_GN"
-
     if gn_tree_name in bpy.data.node_groups:
         node_group = bpy.data.node_groups[gn_tree_name]
         print(f"    Reusing existing Node Group: {gn_tree_name}")
     else:
         node_group = bpy.data.node_groups.new(name=gn_tree_name, type='GeometryNodeTree')
         print(f"    Created new Node Group: {gn_tree_name}")
-
         nodes = node_group.nodes
         links = node_group.links
         nodes.clear()
-
         group_input = nodes.new(type='NodeGroupInput')
         group_input.location = (-600, 0)
         group_output = nodes.new(type='NodeGroupOutput')
         group_output.location = (400, 0)
-
-        # Ensure input and output sockets are named 'Geometry'
         node_group.inputs.new('NodeSocketGeometry', 'Geometry')
         node_group.outputs.new('NodeSocketGeometry', 'Geometry')
-
-
         set_pos = nodes.new('GeometryNodeSetPosition')
         set_pos.location = (0, 0)
-
         noise_tex = nodes.new('ShaderNodeTexNoise')
         noise_tex.location = (-400, -200)
-        noise_tex.noise_dimensions = '3D' # Default is 3D
+        noise_tex.noise_dimensions = '3D'
         noise_tex.inputs['Scale'].default_value = float(params.get("SCALE", 5.0))
-        # Use 'W' as a proxy for seed if noise is 3D, or a dedicated seed input if available/desired for 4D.
         noise_tex.inputs['W'].default_value = float(params.get("SEED", 0.0))
-
-        # To make noise affect position, we need to convert its factor (0-1) or color (vector)
-        # into a displacement vector. Usually, this involves Normal.
         normal_node = nodes.new('GeometryNodeInputNormal')
         normal_node.location = (-400, 0)
-
-        # Scale the noise factor by strength
-        strength_scale_node = nodes.new('ShaderNodeMath') # Using Math node for scalar strength
+        strength_scale_node = nodes.new('ShaderNodeMath')
         strength_scale_node.operation = 'MULTIPLY'
         strength_scale_node.location = (-200, -200)
         strength_scale_node.inputs[1].default_value = float(params.get("STRENGTH", 0.5))
         links.new(noise_tex.outputs['Fac'], strength_scale_node.inputs[0])
-
-
-        # Multiply scaled noise factor by normal vector to displace along normal
         vec_multiply_normal = nodes.new('ShaderNodeVectorMath')
-        vec_multiply_normal.operation = 'MULTIPLY' # Or 'SCALE' if using the factor directly on normal
+        vec_multiply_normal.operation = 'MULTIPLY'
         vec_multiply_normal.location = (-200, 0)
         links.new(normal_node.outputs['Normal'], vec_multiply_normal.inputs[0])
-        links.new(strength_scale_node.outputs['Value'], vec_multiply_normal.inputs[1]) # Use scaled noise factor
-
-        # Handle displacement axis (simplified: Z or Normal)
-        displace_axis = params.get("AXIS", "NORMAL").upper() # Default to NORMAL
-
+        links.new(strength_scale_node.outputs['Value'], vec_multiply_normal.inputs[1])
+        displace_axis = params.get("AXIS", "NORMAL").upper()
         offset_vector_source_node = None
         if displace_axis == 'Z':
             combine_xyz = nodes.new('ShaderNodeCombineXYZ')
-            combine_xyz.location = (-200, 200) # Position it if used
-            links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['Z']) # Noise Fac directly to Z
-            # X and Y inputs of CombineXYZ remain 0 by default.
+            combine_xyz.location = (-200, 200)
+            links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['Z'])
             offset_vector_source_node = combine_xyz
         elif displace_axis == 'X':
             combine_xyz = nodes.new('ShaderNodeCombineXYZ')
@@ -442,16 +371,12 @@ def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
             combine_xyz.location = (-200, 200)
             links.new(strength_scale_node.outputs['Value'], combine_xyz.inputs['Y'])
             offset_vector_source_node = combine_xyz
-        else: # Default to Normal
+        else:
             offset_vector_source_node = vec_multiply_normal
             print("    Displacing along Normal.")
-
-
         links.new(offset_vector_source_node.outputs['Vector'], set_pos.inputs['Offset'])
-
         links.new(group_input.outputs['Geometry'], set_pos.inputs['Geometry'])
         links.new(set_pos.outputs['Geometry'], group_output.inputs['Geometry'])
-
     mod.node_group = node_group
     bpy.context.view_layer.objects.active = target_obj
     target_obj.select_set(True)
@@ -459,28 +384,22 @@ def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
 
 def handle_zw_animation_block(anim_data: dict):
     if not bpy: return
-
     target_obj_name = anim_data.get("TARGET_OBJECT")
     prop_path = anim_data.get("PROPERTY_PATH")
     prop_idx_str = anim_data.get("INDEX")
     unit = anim_data.get("UNIT", "").lower()
     interpolation_str = anim_data.get("INTERPOLATION", "BEZIER").upper()
     keyframes_list = anim_data.get("KEYFRAMES")
-
     if not all([target_obj_name, prop_path, keyframes_list]):
         print(f"[!] ZW-ANIMATION '{anim_data.get('NAME', 'UnnamedAnimation')}' missing TARGET_OBJECT, PROPERTY_PATH, or KEYFRAMES. Skipping.")
         return
-
     target_obj = bpy.data.objects.get(target_obj_name)
     if not target_obj:
         print(f"[!] ZW-ANIMATION target object '{target_obj_name}' not found. Skipping.")
         return
-
     if not target_obj.animation_data:
         target_obj.animation_data_create()
-
     action_name = anim_data.get("NAME", f"{target_obj.name}_{prop_path}_AnimAction")
-    # Use existing action if name matches, otherwise create new or use current if no name conflict
     if not target_obj.animation_data.action:
         print(f"    Creating new Action: {action_name} for {target_obj_name}")
         target_obj.animation_data.action = bpy.data.actions.new(name=action_name)
@@ -489,9 +408,7 @@ def handle_zw_animation_block(anim_data: dict):
         target_obj.animation_data.action = bpy.data.actions.new(name=action_name)
     else:
         print(f"    Using existing or current Action: {target_obj.animation_data.action.name} for {target_obj_name}")
-
     action = target_obj.animation_data.action
-
     prop_idx = None
     if prop_idx_str is not None:
         try:
@@ -499,81 +416,62 @@ def handle_zw_animation_block(anim_data: dict):
         except ValueError:
             print(f"    [Warning] Invalid INDEX '{prop_idx_str}' for animation on {target_obj_name}. Ignoring index.")
             prop_idx = None
-
     print(f"  Animating '{target_obj.name}.{prop_path}' (Index: {prop_idx if prop_idx is not None else 'All'}) with {interpolation_str} interpolation.")
-
     for kf_data in keyframes_list:
         frame = kf_data.get("FRAME")
         value_input = kf_data.get("VALUE")
-
         if frame is None or value_input is None:
             print(f"    [Warning] Keyframe missing FRAME or VALUE for {target_obj_name}. Skipping keyframe: {kf_data}")
             continue
-
         frame = float(frame)
-
-        if prop_idx is not None: # Animating a single component (e.g. rotation_euler[2])
+        if prop_idx is not None:
             try:
                 val = float(value_input)
-                if unit == "degrees" and "rotation" in prop_path.lower(): # Check if it's a rotation property
+                if unit == "degrees" and "rotation" in prop_path.lower():
                     val = math.radians(val)
-
                 fcurve = action.fcurves.find(prop_path, index=prop_idx)
                 if not fcurve:
                     fcurve = action.fcurves.new(prop_path, index=prop_idx, action_group=target_obj.name)
-
                 keyframe_point = fcurve.keyframe_points.insert(frame, val)
                 keyframe_point.interpolation = interpolation_str
-                # print(f"      KF Inserted: Frame {frame}, Value {val:.3f}, Interpolation {interpolation_str}")
             except ValueError:
                 print(f"    [Warning] Could not convert value '{value_input}' to float for {target_obj_name}.{prop_path}[{prop_idx}]. Skipping keyframe.")
-
-        else: # Animating a vector (e.g. location, scale)
-            parsed_tuple = safe_eval(str(value_input), None) # Ensure value_input is str for safe_eval
-            if isinstance(parsed_tuple, tuple) and (len(parsed_tuple) == 3 or len(parsed_tuple) == 4) : # Typically 3 for loc/scale/rot_euler
+        else:
+            parsed_tuple = safe_eval(str(value_input), None)
+            if isinstance(parsed_tuple, tuple) and (len(parsed_tuple) == 3 or len(parsed_tuple) == 4) :
                 final_values = list(parsed_tuple)
                 if unit == "degrees" and "rotation" in prop_path.lower():
                     final_values = [math.radians(c) for c in parsed_tuple]
-
                 for i, comp_val in enumerate(final_values):
-                    # For vectors like 'location', 'scale', 'rotation_euler', prop_idx is used as component index (0=X, 1=Y, 2=Z)
                     fcurve = action.fcurves.find(prop_path, index=i)
                     if not fcurve:
                         fcurve = action.fcurves.new(prop_path, index=i, action_group=target_obj.name)
-
                     keyframe_point = fcurve.keyframe_points.insert(frame, comp_val)
                     keyframe_point.interpolation = interpolation_str
-                    # print(f"      KF Inserted (Vec Idx {i}): Frame {frame}, Value {comp_val:.3f}, Interpolation {interpolation_str}")
             else:
                 print(f"    [Warning] Value '{value_input}' is not a valid tuple string for vector property {target_obj_name}.{prop_path}. Skipping keyframe.")
     print(f"    ✅ Finished animation setup for: {action_name}")
 
 def handle_zw_driver_block(driver_data: dict):
     if not bpy: return
-
     source_object_name = driver_data.get("SOURCE_OBJECT")
     source_property_path = driver_data.get("SOURCE_PROPERTY")
     target_object_name = driver_data.get("TARGET_OBJECT")
     target_property_path = driver_data.get("TARGET_PROPERTY")
-    expression = driver_data.get("EXPRESSION", "var") # Default to direct copy
+    expression = driver_data.get("EXPRESSION", "var")
     driver_name = driver_data.get("NAME", f"ZWDriver_{target_object_name}_{target_property_path}")
-
     if not all([source_object_name, source_property_path, target_object_name, target_property_path]):
         print(f"[!] Error in ZW-DRIVER '{driver_name}': Missing one or more required fields (SOURCE_OBJECT, SOURCE_PROPERTY, TARGET_OBJECT, TARGET_PROPERTY). Skipping.")
         return
-
     source_obj = bpy.data.objects.get(source_object_name)
     target_obj = bpy.data.objects.get(target_object_name)
-
     if not source_obj:
         print(f"[!] Error in ZW-DRIVER '{driver_name}': Source object '{source_object_name}' not found. Skipping.")
         return
     if not target_obj:
         print(f"[!] Error in ZW-DRIVER '{driver_name}': Target object '{target_object_name}' not found. Skipping.")
         return
-
     print(f"[*] Creating ZW-DRIVER '{driver_name}': {source_object_name}.{source_property_path} -> {target_object_name}.{target_property_path}")
-
     try:
         parsed_target_path = target_property_path
         parsed_target_index = -1
@@ -585,36 +483,26 @@ def handle_zw_driver_block(driver_data: dict):
             except ValueError:
                 print(f"    [Error] Invalid index in TARGET_PROPERTY: {target_property_path} for driver '{driver_name}'. Skipping.")
                 return
-
-        # Add driver
         if parsed_target_index != -1:
             fcurve = target_obj.driver_add(parsed_target_path, parsed_target_index)
         else:
-            # This handles paths like "location.x", "rotation_euler.z", custom properties etc.
             fcurve = target_obj.driver_add(parsed_target_path)
-
         driver = fcurve.driver
         driver.type = 'SCRIPTED'
         driver.expression = expression
-
-        # Add variable
         var = driver.variables.new()
-        var.name = "var" # Variable name used in the expression
+        var.name = "var"
         var.type = 'SINGLE_PROP'
-
         var_target = var.targets[0]
         var_target.id_type = 'OBJECT'
         var_target.id = source_obj
         var_target.data_path = source_property_path
-
         print(f"    ✅ Successfully created driver: '{driver_name}'")
         print(f"       Source: {source_obj.name} -> {source_property_path}")
         print(f"       Target: {target_obj.name} -> {target_property_path} (index: {parsed_target_index if parsed_target_index != -1 else 'N/A'})")
         print(f"       Expression: {expression}")
-
     except Exception as e:
         print(f"    [!] Error setting up driver '{driver_name}': {e}")
-
 
 # --- Main Processing Logic ---
 
@@ -625,10 +513,8 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
     """
     if not bpy:
         return
-
     if current_bpy_collection is None:
         current_bpy_collection = bpy.context.scene.collection
-
     if not isinstance(data_dict, dict):
         return
 
@@ -640,10 +526,8 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
         if key.upper().startswith("ZW-COLLECTION"):
             collection_name = key.split(":", 1)[1].strip() if ":" in key else key.replace("ZW-COLLECTION", "").strip()
             if not collection_name: collection_name = "Unnamed_ZW_Collection"
-
             print(f"[*] Processing ZW-COLLECTION block: '{collection_name}' under '{current_bpy_collection.name}'")
             block_bpy_collection = get_or_create_collection(collection_name, parent_collection=current_bpy_collection)
-
             if isinstance(value, dict) and "CHILDREN" in value and isinstance(value["CHILDREN"], list):
                 for child_def_item in value["CHILDREN"]:
                     if isinstance(child_def_item, dict):
@@ -655,15 +539,15 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
         elif key.upper() == "ZW-FUNCTION":
             if isinstance(value, dict):
                 print(f"[*] Processing ZW-FUNCTION block: {value.get('NAME', 'Unnamed Function')}")
-                handle_zw_function_block(value) # Pass the dictionary value
+                handle_zw_function_block(value)
             else:
                 print(f"[!] Warning: ZW-FUNCTION value is not a dictionary: {value}")
             continue
 
-        elif key.upper() == "ZW-DRIVER": # Handle ZW-DRIVER
+        elif key.upper() == "ZW-DRIVER":
             if isinstance(value, dict):
                 print(f"[*] Processing ZW-DRIVER block: {value.get('NAME', 'Unnamed Driver')}")
-                handle_zw_driver_block(value) # Pass the dictionary value
+                handle_zw_driver_block(value)
             else:
                 print(f"[!] Warning: ZW-DRIVER value is not a dictionary: {value}")
             continue
@@ -692,6 +576,13 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 print(f"    [Warning] Value for 'ZW-LIGHT' key is not a dictionary. Value: {value}")
             continue
 
+        elif key.upper() == "ZW-STAGE":
+            if isinstance(value, dict):
+                print(f"  Processing ZW-STAGE block: {value.get('NAME', 'UnnamedStage')}")
+                handle_zw_stage_block(value)
+            else:
+                print(f"    [Warning] Value for 'ZW-STAGE' key is not a dictionary. Value: {value}")
+            continue
 
         if key.upper() == "ZW-OBJECT":
             if isinstance(value, dict):
@@ -704,18 +595,15 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
 
         if obj_attributes_for_current_zw_object:
             created_bpy_object_for_current_zw_object = handle_zw_object_creation(obj_attributes_for_current_zw_object, parent_bpy_obj)
-
             if created_bpy_object_for_current_zw_object:
                 explicit_collection_name = obj_attributes_for_current_zw_object.get("COLLECTION")
                 if explicit_collection_name:
                     target_collection_for_this_object = get_or_create_collection(explicit_collection_name, parent_collection=bpy.context.scene.collection)
-
                 if target_collection_for_this_object:
                     for coll in created_bpy_object_for_current_zw_object.users_collection:
                         coll.objects.unlink(created_bpy_object_for_current_zw_object)
                     target_collection_for_this_object.objects.link(created_bpy_object_for_current_zw_object)
                     print(f"    Linked '{created_bpy_object_for_current_zw_object.name}' to collection '{target_collection_for_this_object.name}'")
-
                 children_list = obj_attributes_for_current_zw_object.get("CHILDREN")
                 if children_list and isinstance(children_list, list):
                     print(f"[*] Processing CHILDREN for '{created_bpy_object_for_current_zw_object.name}' in collection '{target_collection_for_this_object.name}'")
@@ -723,21 +611,108 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                         if isinstance(child_item_definition, dict):
                             process_zw_structure(child_item_definition,
                                                  parent_bpy_obj=created_bpy_object_for_current_zw_object,
-                                                 current_bpy_collection=target_collection_for_this_object) # Children inherit parent's collection unless specified otherwise
+                                                 current_bpy_collection=target_collection_for_this_object)
                         else:
                             print(f"    [!] Warning: Item in CHILDREN list is not a dictionary: {child_item_definition}")
                 elif children_list is not None:
                      print(f"    [!] Warning: CHILDREN attribute for an object is not a list: {type(children_list)}")
-            continue # Finished processing this ZW-OBJECT key
-
-        # Recursive call for other nested structures (like ZW-NESTED-DETAILS or general groups)
-        # These do not create their own Blender objects to become parents, nor do they define a new collection context by themselves.
+            continue
         elif isinstance(value, dict):
-            if key.upper() == "ZW-NESTED-DETAILS": # ZW-NESTED-DETAILS doesn't form a collection by its key
+            if key.upper() == "ZW-NESTED-DETAILS":
                 print(f"[*] Processing ZW-NESTED-DETAILS (semantic parent link: {value.get('PARENT')}). Using collection '{current_bpy_collection.name}'")
-
             process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=current_bpy_collection)
 
+def handle_zw_camera_block(camera_data: dict, current_bpy_collection: bpy.types.Collection):
+    if not bpy: return
+    name = camera_data.get("NAME", "ZWCamera")
+    location_str = camera_data.get("LOCATION", "(0,0,0)")
+    rotation_str = camera_data.get("ROTATION", "(0,0,0)")
+    fov_mm = float(camera_data.get("FOV", 50.0))
+    clip_start = float(camera_data.get("CLIP_START", 0.1))
+    clip_end = float(camera_data.get("CLIP_END", 1000.0))
+    track_target_name = camera_data.get("TRACK_TARGET")
+    explicit_coll_name = camera_data.get("COLLECTION")
+    loc = safe_eval(location_str, (0,0,0))
+    rot_deg = safe_eval(rotation_str, (0,0,0))
+    rot_rad = tuple(math.radians(angle) for angle in rot_deg)
+    print(f"[*] Creating Camera '{name}': LOC={loc}, ROT_RAD={rot_rad}, FOV_MM={fov_mm}")
+    try:
+        bpy.ops.object.camera_add(location=loc, rotation=rot_rad)
+        cam_obj = bpy.context.active_object
+        if not cam_obj:
+            print(f"    [Error] Failed to create camera object '{name}' using bpy.ops.")
+            return
+        cam_obj.name = name
+        cam_data = cam_obj.data
+        cam_data.lens = fov_mm
+        cam_data.clip_start = clip_start
+        cam_data.clip_end = clip_end
+        print(f"    Set camera data for '{name}': Lens={fov_mm}mm, Clip=({clip_start}-{clip_end})")
+        final_collection = current_bpy_collection
+        if explicit_coll_name:
+            final_collection = get_or_create_collection(explicit_coll_name, parent_collection=bpy.context.scene.collection)
+        if final_collection:
+            for coll in cam_obj.users_collection:
+                coll.objects.unlink(cam_obj)
+            final_collection.objects.link(cam_obj)
+            print(f"    Linked '{name}' to collection '{final_collection.name}'")
+        if track_target_name:
+            track_to_obj = bpy.data.objects.get(track_target_name)
+            if track_to_obj:
+                constraint = cam_obj.constraints.new(type='TRACK_TO')
+                constraint.target = track_to_obj
+                constraint.track_axis = 'TRACK_NEGATIVE_Z'
+                constraint.up_axis = 'UP_Y'
+                print(f"    Added 'TRACK_TO' constraint for '{name}' targeting '{track_target_name}'")
+            else:
+                print(f"    [Warning] Track target object '{track_target_name}' not found for camera '{name}'.")
+        print(f"    ✅ Successfully created camera '{name}'.")
+    except Exception as e:
+        print(f"    [Error] Failed to create or configure camera '{name}': {e}")
+
+def handle_zw_light_block(light_data: dict, current_bpy_collection: bpy.types.Collection):
+    if not bpy: return
+    name = light_data.get("NAME", "ZWLight")
+    location_str = light_data.get("LOCATION", "(0,0,0)")
+    rotation_str = light_data.get("ROTATION", "(0,0,0)")
+    light_type_str = light_data.get("TYPE", "POINT").upper()
+    color_str = light_data.get("COLOR", "#FFFFFF")
+    energy = float(light_data.get("ENERGY", 100.0 if light_type_str == "POINT" else 10.0 if light_type_str == "SPOT" else 1.0))
+    use_shadow_str = str(light_data.get("SHADOW", "true")).lower()
+    size = float(light_data.get("SIZE", 0.25 if light_type_str in ["POINT", "SPOT"] else (0.1 if light_type_str == "SUN" else 1.0)))
+    explicit_coll_name = light_data.get("COLLECTION")
+    loc = safe_eval(location_str, (0,0,0))
+    rot_deg = safe_eval(rotation_str, (0,0,0))
+    rot_rad = tuple(math.radians(angle) for angle in rot_deg)
+    parsed_color_rgba = parse_color(color_str)
+    light_color_rgb = parsed_color_rgba[:3]
+    print(f"[*] Creating Light '{name}': TYPE={light_type_str}, LOC={loc}, ROT_RAD={rot_rad}, COLOR={light_color_rgb}, ENERGY={energy}")
+    try:
+        light_bpy_data = bpy.data.lights.new(name=f"{name}_data", type=light_type_str)
+        light_bpy_data.color = light_color_rgb
+        light_bpy_data.energy = energy
+        if hasattr(light_bpy_data, 'use_shadow'):
+             light_bpy_data.use_shadow = (use_shadow_str == 'true')
+        if light_type_str in ['POINT', 'SPOT']:
+            light_bpy_data.shadow_soft_size = size
+        elif light_type_str == 'AREA':
+            light_bpy_data.size = size
+        elif light_type_str == 'SUN':
+            light_bpy_data.angle = size
+        light_obj = bpy.data.objects.new(name=name, object_data=light_bpy_data)
+        light_obj.location = loc
+        light_obj.rotation_euler = rot_rad
+        final_collection = current_bpy_collection
+        if explicit_coll_name:
+            final_collection = get_or_create_collection(explicit_coll_name, parent_collection=bpy.context.scene.collection)
+        if final_collection:
+            final_collection.objects.link(light_obj)
+            print(f"    Linked '{name}' to collection '{final_collection.name}'")
+        else:
+             print(f"    [Warning] No target collection found for light '{name}'. It might not appear in the scene.")
+        print(f"    ✅ Successfully created light '{name}'.")
+    except Exception as e:
+        print(f"    [Error] Failed to create or configure light '{name}': {e}")
 
 def run_blender_adapter():
     """
