@@ -6,13 +6,99 @@ ZW-SCENE_SETUP:
   ACTIVE_COLLECTION: SceneRoot
 ///
 
-// Simple object for default collection
+// --- Test Cases for ZW-ANIMATION (Phase 6.8) ---
+
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: AnimCube_ZRotate_Linear
+  LOCATION: (-10, 0, 1)
+  MATERIAL: AnimMat_Rotation
+  COLOR: "#B0E0E6" // PowderBlue
+  COLLECTION: AnimationSuite_Tests
+///
+
+ZW-ANIMATION:
+  NAME: Spin_AnimCube_Z_Linear
+  TARGET_OBJECT: AnimCube_ZRotate_Linear
+  PROPERTY_PATH: "rotation_euler"
+  INDEX: 2
+  UNIT: degrees
+  INTERPOLATION: LINEAR
+  KEYFRAMES:
+    - FRAME: 1
+      VALUE: 0
+    - FRAME: 50
+      VALUE: 180
+    - FRAME: 100
+      VALUE: 360
+///
+
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: AnimSphere_Path_Bezier
+  LOCATION: (-10, 3, 1)
+  SCALE: (0.4, 0.4, 0.4)
+  MATERIAL: AnimMat_Path
+  COLOR: "#FFDAB9" // PeachPuff
+  COLLECTION: AnimationSuite_Tests
+///
+
+ZW-ANIMATION:
+  NAME: Move_AnimSphere_XYZ_Bezier
+  TARGET_OBJECT: AnimSphere_Path_Bezier
+  PROPERTY_PATH: "location"
+  INTERPOLATION: BEZIER
+  KEYFRAMES:
+    - FRAME: 1
+      VALUE: "(-10, 3, 1)"
+    - FRAME: 25
+      VALUE: "(-12, 5, 2)"
+    - FRAME: 50
+      VALUE: "(-10, 7, 1)"
+    - FRAME: 75
+      VALUE: "(-8, 5, 0.5)"
+    - FRAME: 100
+      VALUE: "(-10, 3, 1)"
+///
+
+ZW-OBJECT:
+  TYPE: Cone
+  NAME: AnimCone_Scale_Constant
+  LOCATION: (-10, -3, 0.5)
+  SCALE: (0.3,0.3,0.8)
+  MATERIAL: AnimMat_Scale
+  COLOR: "#98FB98" // PaleGreen
+  COLLECTION: AnimationSuite_Tests
+///
+
+ZW-ANIMATION:
+  NAME: Pop_AnimCone_Scale_Constant
+  TARGET_OBJECT: AnimCone_Scale_Constant
+  PROPERTY_PATH: "scale"
+  INTERPOLATION: CONSTANT
+  KEYFRAMES:
+    - FRAME: 1
+      VALUE: "(0.3, 0.3, 0.8)"
+    - FRAME: 20
+      VALUE: "(0.6, 0.6, 1.5)"
+    - FRAME: 40
+      VALUE: "(0.3, 0.3, 0.8)"
+    - FRAME: 60
+      VALUE: "(0.7, 0.7, 1.8)"
+    - FRAME: 80
+      VALUE: "(0.1, 0.1, 0.2)"
+    - FRAME: 100
+      VALUE: "(0.3, 0.3, 0.8)"
+///
+
+
+// --- Existing Content (for context and regression testing) ---
+
 ZW-OBJECT: Sphere
   NAME: DefaultCollectionSphere
   LOCATION: (0,0,5)
 ///
 
-// Object with explicit COLLECTION attribute
 ZW-OBJECT:
   TYPE: Sphere
   NAME: ArtifactSphere
@@ -23,7 +109,6 @@ ZW-OBJECT:
   COLLECTION: SpecialArtifacts
 ///
 
-// --- Test Case for ZW-FUNCTION: ARRAY ---
 ZW-OBJECT:
   TYPE: Cylinder
   NAME: PillarSource
@@ -44,16 +129,14 @@ ZW-FUNCTION:
     OFFSET: "(2.0, 0, 0)"
 ///
 
-// --- Test Case for ZW-FUNCTION: DISPLACE_NOISE ---
 ZW-OBJECT:
   TYPE: Plane
   NAME: TerrainBase
-  LOCATION: (0, -15, 0) # Adjusted Y to avoid Driver examples
+  LOCATION: (0, -15, 0)
   SCALE: (10, 10, 1)
   MATERIAL: EarthyGround
   COLOR: "#A0522D"
   SHADING: Smooth
-  // SUBDIVISIONS: 50
   COLLECTION: Landscapes
 ///
 
@@ -67,15 +150,13 @@ ZW-FUNCTION:
     AXIS: Z
 ///
 
-// --- Test Case for ZW-DRIVER ---
-
 ZW-OBJECT:
   TYPE: Cube
   NAME: DriverSourceCube
-  LOCATION: (0, -10, 1) // Initial location
+  LOCATION: (0, -10, 1)
   SCALE: (1,1,1)
   MATERIAL: DriverSourceMat
-  COLOR: "#00FF00" // Green
+  COLOR: "#00FF00"
   COLLECTION: DriverExamples
 ///
 
@@ -85,7 +166,7 @@ ZW-OBJECT:
   LOCATION: (0, -12, 1)
   SCALE: (0.5, 0.5, 0.5)
   MATERIAL: DrivenMat
-  COLOR: "#FF00FF" // Magenta
+  COLOR: "#FF00FF"
   COLLECTION: DriverExamples
 ///
 
@@ -94,74 +175,9 @@ ZW-DRIVER:
   SOURCE_OBJECT: DriverSourceCube
   SOURCE_PROPERTY: "location.x"
   TARGET_OBJECT: DrivenSphere
-  TARGET_PROPERTY: "scale[2]"    // Z scale (scale.z)
+  TARGET_PROPERTY: "scale[2]"
   EXPRESSION: "var * 0.5 + 0.1"
 ///
 
-ZW-OBJECT:
-  TYPE: Cone
-  NAME: RotatorCone
-  LOCATION: (2, -10, 1)
-  COLLECTION: DriverExamples
-///
-
-ZW-DRIVER:
-  NAME: DriverSourceX_To_ConeZRotation
-  SOURCE_OBJECT: DriverSourceCube
-  SOURCE_PROPERTY: "location.x"
-  TARGET_OBJECT: RotatorCone
-  TARGET_PROPERTY: "rotation_euler[2]" // Z-axis rotation in radians
-  EXPRESSION: "var * 0.785" // Roughly var * 45 degrees
-///
-
-ZW-OBJECT:
-  TYPE: Plane
-  NAME: EmissivePlaneDriverTarget // Renamed for clarity
-  LOCATION: (0, -14, 1) // Adjusted Y
-  SCALE: (2,2,1)
-  MATERIAL: EmissiveDriverMat
-  COLOR: "(0.1,0.1,0.1,1)"
-  COLLECTION: DriverExamples
-  BSDF:
-    EMISSION_STRENGTH: 0.0
-///
-
-ZW-DRIVER:
-  NAME: CubeX_To_PlaneYRotation // Changed target property
-  SOURCE_OBJECT: DriverSourceCube
-  SOURCE_PROPERTY: "location.x"
-  TARGET_OBJECT: EmissivePlaneDriverTarget
-  TARGET_PROPERTY: "rotation_euler[1]" // Y-axis rotation
-  EXPRESSION: "var * 0.2"
-///
-
-
-// --- Existing more complex structures (for context/regression) ---
-ZW-OBJECT:
-  TYPE: Cube
-  NAME: ModuleSource
-  LOCATION: (10, 10, 0.5)
-  SCALE: (1,1,1)
-  MATERIAL: ModuleMat
-  COLLECTION: Modules
-  CHILDREN:
-    - ZW-OBJECT:
-        TYPE: Sphere
-        NAME: ModuleSensor
-        LOCATION: (0,0,0.6)
-        SCALE: (0.2,0.2,0.2)
-        MATERIAL: SensorGlass
-///
-
-ZW-FUNCTION:
-  NAME: CreateModuleArray
-  TARGET: ModuleSource
-  OPERATION: ARRAY
-  PARAMS:
-    COUNT: 3
-    OFFSET: "(0, 2.0, 0)"
-    MODE: INSTANCE
-///
-
-NOTE: This scene now includes ZW-DRIVER blocks for testing driven relationships between object properties, alongside ZW-FUNCTIONs and standard object definitions.
+NOTE: This scene now includes ZW-ANIMATION blocks for testing keyframe animation, alongside ZW-FUNCTIONs, ZW-DRIVERs, and standard object definitions with materials, parenting, and collections.
 ///

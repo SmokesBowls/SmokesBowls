@@ -897,6 +897,108 @@ In this example, moving the `ControlCube` along its X-axis will dynamically chan
 
 This `ZW-DRIVER` functionality opens up possibilities for creating more dynamic and interconnected scenes directly from ZW, forming a bridge towards more complex animation and rigging setups.
 
+### Phase 6.8: Keyframe Animations with `ZW-ANIMATION`
+
+This phase empowers the ZW protocol to define explicit keyframed animations for object properties in Blender, allowing for direct control over how objects change over time.
+
+#### ZW Syntax for Animations:
+
+The `ZW-ANIMATION` block is used to define a set of keyframes for one or more related animation channels (F-Curves) on a target object.
+
+```zw
+ZW-ANIMATION:
+  NAME: <OptionalAnimationName>      // Optional descriptive name for this animation block
+  TARGET_OBJECT: <TargetObjectName>  // The NAME of the ZW-OBJECT to animate
+  PROPERTY_PATH: "<RNA_Property>"    // The base RNA property path (e.g., "location", "rotation_euler", "scale")
+                                     // Can also be a path to a custom property or material node input.
+  INDEX: <OptionalInteger>          // Specify for single component of a vector (e.g., 0 for X, 1 for Y, 2 for Z).
+                                     // If omitted and VALUE is a tuple, all components are animated.
+  UNIT: degrees                     // Optional. Use "degrees" for rotation properties if KEYFRAME VALUEs are in degrees.
+                                     // Adapter converts to radians for Blender. Defaults to Blender's native units (radians for rotation).
+  INTERPOLATION: <BEZIER|LINEAR|CONSTANT> // Optional. Sets interpolation for all keyframes in this block. Defaults to "BEZIER".
+  KEYFRAMES:                         // List of keyframe definitions
+    - FRAME: <FrameNumber>
+      VALUE: <ScalarOrTupleString>   // e.g., 90, "0.5", "(1.0, 2.0, 3.0)"
+    - FRAME: <FrameNumber>
+      VALUE: <ScalarOrTupleString>
+    // ... more keyframes
+///
+```
+
+-   **`NAME`** (Optional): A name for this animation sequence, mainly for clarity or debugging.
+-   **`TARGET_OBJECT`**: The `NAME` of the ZW-OBJECT in Blender that will be animated.
+-   **`PROPERTY_PATH`**: The Blender RNA data path to the property to be animated (e.g., `"location"`, `"rotation_euler"`, `"scale"`). For more advanced uses, this could target material properties like `"material_slots['MatName'].material.node_tree.nodes['Principled BSDF'].inputs['Alpha'].default_value"`.
+-   **`INDEX`** (Optional): If `PROPERTY_PATH` refers to a multi-component property (like `location` which is a vector of X,Y,Z), `INDEX` specifies which component to animate (0 for X, 1 for Y, 2 for Z). If `INDEX` is omitted, and `VALUE` in `KEYFRAMES` is a tuple string, the adapter will attempt to animate all components of the property.
+-   **`UNIT`** (Optional): If set to `"degrees"` and `PROPERTY_PATH` is a rotational property (e.g., `"rotation_euler"`), the `VALUE`s in `KEYFRAMES` are assumed to be in degrees and will be converted to radians by the adapter. Otherwise, values are used as-is (Blender's default for rotation is radians).
+-   **`INTERPOLATION`** (Optional): Specifies the interpolation type for the keyframes created by this block. Supported values: `"BEZIER"` (default), `"LINEAR"`, `"CONSTANT"`. This is applied to each created keyframe point.
+-   **`KEYFRAMES`**: A list of dictionaries, where each dictionary defines a single keyframe with:
+    -   `FRAME: <Integer>`: The frame number for this keyframe.
+    -   `VALUE: <ScalarOrTupleString>`: The value of the property at this frame.
+        -   If `INDEX` is specified, `VALUE` should be a single number (or a string parsable to one).
+        -   If `INDEX` is *not* specified and `PROPERTY_PATH` is a vector type (e.g., `"location"`), `VALUE` should be a string representing a tuple (e.g., `"(1.0, 2.0, 3.0)"`). The adapter will parse this and create keyframes for each component (X, Y, Z).
+
+#### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function detects `ZW-ANIMATION` keys and passes the definition to `handle_zw_animation_block`.
+-   `handle_zw_animation_block`:
+    1.  Retrieves the target Blender object.
+    2.  Ensures the object has `animation_data` and an `action` (creating them if necessary). An action name can be derived from the `TARGET_OBJECT` and `PROPERTY_PATH` or the optional `NAME` field of the `ZW-ANIMATION` block.
+    3.  For each entry in the `KEYFRAMES` list:
+        -   It parses the `FRAME` number and `VALUE`.
+        -   If animating a vector property (like "location") without a specific `INDEX`, it parses the tuple string `VALUE` and creates/updates F-Curves for each component (X, Y, Z).
+        -   If an `INDEX` is provided (or for a scalar property), it creates/updates the F-Curve for that specific component/property.
+        -   It converts `VALUE` to radians if `UNIT: degrees` is specified for rotational properties.
+        -   It uses `fcurve.keyframe_points.insert(frame, value)` to add the keyframe.
+        -   It sets the `keyframe_point.interpolation` based on the `INTERPOLATION` type specified in the ZW block.
+    -   Helper functions like `ensure_fcurve` and `set_keyframe_interpolation` assist in this process.
+
+#### Examples:
+
+**1. Single-axis rotation (Z-axis) with LINEAR interpolation:**
+```zw
+ZW-OBJECT:
+  TYPE: Cube
+  NAME: MyRotatingCube
+///
+ZW-ANIMATION:
+  TARGET_OBJECT: MyRotatingCube
+  PROPERTY_PATH: "rotation_euler"
+  INDEX: 2 // Z-axis
+  UNIT: degrees
+  INTERPOLATION: LINEAR
+  KEYFRAMES:
+    - FRAME: 1
+      VALUE: 0
+    - FRAME: 60
+      VALUE: 360
+///
+```
+
+**2. Multi-axis location animation (X,Y,Z) with BEZIER interpolation (default):**
+```zw
+ZW-OBJECT:
+  TYPE: Sphere
+  NAME: BouncingBall
+///
+ZW-ANIMATION:
+  TARGET_OBJECT: BouncingBall
+  PROPERTY_PATH: "location" // Animates X, Y, Z location
+  // UNIT defaults to Blender units
+  // INTERPOLATION defaults to BEZIER
+  KEYFRAMES:
+    - FRAME: 1
+      VALUE: "(0,0,5)"  // Start high
+    - FRAME: 15
+      VALUE: "(0,0,1)"  // Hit ground
+    - FRAME: 30
+      VALUE: "(0,0,3)"  // Bounce up
+    - FRAME: 45
+      VALUE: "(0,0,1)"  // Hit ground again
+///
+```
+
+This `ZW-ANIMATION` system provides a robust way to define complex movements and changes over time directly within the ZW protocol, further enhancing its capability as a scene description and control language.
+
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)
 

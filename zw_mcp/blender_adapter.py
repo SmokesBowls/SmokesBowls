@@ -1,6 +1,9 @@
 # zw_mcp/blender_adapter.py
 import sys
+import json # For potential pretty printing if needed, not directly for to_zw
 from pathlib import Path
+import argparse
+import math # Added for math.radians
 
 # Attempt to import bpy, handling the case where the script is not run within Blender
 try:
@@ -454,6 +457,97 @@ def apply_displace_noise_gn(target_obj: bpy.types.Object, params: dict):
     target_obj.select_set(True)
     print(f"    Applied DISPLACE_NOISE to '{target_obj.name}'")
 
+def handle_zw_animation_block(anim_data: dict):
+    if not bpy: return
+
+    target_obj_name = anim_data.get("TARGET_OBJECT")
+    prop_path = anim_data.get("PROPERTY_PATH")
+    prop_idx_str = anim_data.get("INDEX")
+    unit = anim_data.get("UNIT", "").lower()
+    interpolation_str = anim_data.get("INTERPOLATION", "BEZIER").upper()
+    keyframes_list = anim_data.get("KEYFRAMES")
+
+    if not all([target_obj_name, prop_path, keyframes_list]):
+        print(f"[!] ZW-ANIMATION '{anim_data.get('NAME', 'UnnamedAnimation')}' missing TARGET_OBJECT, PROPERTY_PATH, or KEYFRAMES. Skipping.")
+        return
+
+    target_obj = bpy.data.objects.get(target_obj_name)
+    if not target_obj:
+        print(f"[!] ZW-ANIMATION target object '{target_obj_name}' not found. Skipping.")
+        return
+
+    if not target_obj.animation_data:
+        target_obj.animation_data_create()
+
+    action_name = anim_data.get("NAME", f"{target_obj.name}_{prop_path}_AnimAction")
+    # Use existing action if name matches, otherwise create new or use current if no name conflict
+    if not target_obj.animation_data.action:
+        print(f"    Creating new Action: {action_name} for {target_obj_name}")
+        target_obj.animation_data.action = bpy.data.actions.new(name=action_name)
+    elif target_obj.animation_data.action.name != action_name and anim_data.get("NAME"):
+        print(f"    Creating new Action (name conflict/specified): {action_name} for {target_obj_name}")
+        target_obj.animation_data.action = bpy.data.actions.new(name=action_name)
+    else:
+        print(f"    Using existing or current Action: {target_obj.animation_data.action.name} for {target_obj_name}")
+
+    action = target_obj.animation_data.action
+
+    prop_idx = None
+    if prop_idx_str is not None:
+        try:
+            prop_idx = int(prop_idx_str)
+        except ValueError:
+            print(f"    [Warning] Invalid INDEX '{prop_idx_str}' for animation on {target_obj_name}. Ignoring index.")
+            prop_idx = None
+
+    print(f"  Animating '{target_obj.name}.{prop_path}' (Index: {prop_idx if prop_idx is not None else 'All'}) with {interpolation_str} interpolation.")
+
+    for kf_data in keyframes_list:
+        frame = kf_data.get("FRAME")
+        value_input = kf_data.get("VALUE")
+
+        if frame is None or value_input is None:
+            print(f"    [Warning] Keyframe missing FRAME or VALUE for {target_obj_name}. Skipping keyframe: {kf_data}")
+            continue
+
+        frame = float(frame)
+
+        if prop_idx is not None: # Animating a single component (e.g. rotation_euler[2])
+            try:
+                val = float(value_input)
+                if unit == "degrees" and "rotation" in prop_path.lower(): # Check if it's a rotation property
+                    val = math.radians(val)
+
+                fcurve = action.fcurves.find(prop_path, index=prop_idx)
+                if not fcurve:
+                    fcurve = action.fcurves.new(prop_path, index=prop_idx, action_group=target_obj.name)
+
+                keyframe_point = fcurve.keyframe_points.insert(frame, val)
+                keyframe_point.interpolation = interpolation_str
+                # print(f"      KF Inserted: Frame {frame}, Value {val:.3f}, Interpolation {interpolation_str}")
+            except ValueError:
+                print(f"    [Warning] Could not convert value '{value_input}' to float for {target_obj_name}.{prop_path}[{prop_idx}]. Skipping keyframe.")
+
+        else: # Animating a vector (e.g. location, scale)
+            parsed_tuple = safe_eval(str(value_input), None) # Ensure value_input is str for safe_eval
+            if isinstance(parsed_tuple, tuple) and (len(parsed_tuple) == 3 or len(parsed_tuple) == 4) : # Typically 3 for loc/scale/rot_euler
+                final_values = list(parsed_tuple)
+                if unit == "degrees" and "rotation" in prop_path.lower():
+                    final_values = [math.radians(c) for c in parsed_tuple]
+
+                for i, comp_val in enumerate(final_values):
+                    # For vectors like 'location', 'scale', 'rotation_euler', prop_idx is used as component index (0=X, 1=Y, 2=Z)
+                    fcurve = action.fcurves.find(prop_path, index=i)
+                    if not fcurve:
+                        fcurve = action.fcurves.new(prop_path, index=i, action_group=target_obj.name)
+
+                    keyframe_point = fcurve.keyframe_points.insert(frame, comp_val)
+                    keyframe_point.interpolation = interpolation_str
+                    # print(f"      KF Inserted (Vec Idx {i}): Frame {frame}, Value {comp_val:.3f}, Interpolation {interpolation_str}")
+            else:
+                print(f"    [Warning] Value '{value_input}' is not a valid tuple string for vector property {target_obj_name}.{prop_path}. Skipping keyframe.")
+    print(f"    ✅ Finished animation setup for: {action_name}")
+
 def handle_zw_driver_block(driver_data: dict):
     if not bpy: return
 
@@ -572,6 +666,14 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
                 handle_zw_driver_block(value) # Pass the dictionary value
             else:
                 print(f"[!] Warning: ZW-DRIVER value is not a dictionary: {value}")
+            continue
+
+        elif key.upper() == "ZW-ANIMATION": # Handle ZW-ANIMATION
+            if isinstance(value, dict):
+                print(f"  Processing ZW-ANIMATION block: {value.get('NAME', 'UnnamedAnimation')}")
+                handle_zw_animation_block(value)
+            else:
+                print(f"    [Warning] Value for 'ZW-ANIMATION' key is not a dictionary. Value: {value}")
             continue
 
 
