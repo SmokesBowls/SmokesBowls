@@ -1496,4 +1496,42 @@ ZW-STAGE:
 
 This initial implementation of `ZW-STAGE` provides a foundational system for scripting basic timeline events and scene dynamics using the ZW protocol.
 
+---
+## ZW Tools: Utility & R&D Lab Scripts
+
+This section covers utility scripts that support the development, testing, and management of ZW files and the ZW MCP ecosystem. These tools are typically run standalone and are not part of the core runtime libraries like `blender_adapter.py` or `ollama_agent.py`.
+
+### `tools/zw_import_watcher.py`
+
+-   **Purpose:** Monitors a specified local folder for new `.zw` (ZW Template) files, performs a basic validation check on them, and then sorts them into a "validated" folder or logs them as "rejected". This script is intended as a utility for research and development, helping to manage incoming ZW patterns or templates before they are formally integrated or used by more complex parts of the system.
+-   **Functionality:**
+    -   **Monitored Folder:** `zw_drop_folder/experimental_patterns/` (relative to the project root where the script is ideally run, or where `zw_drop_folder` is created).
+    -   **Validation (Placeholder):** The current validation logic in `validate_zw_template()` is a placeholder. It checks if a file contains the line "ENTROPY:" (as per original user spec) or, as a basic fallback, "ZW-OBJECT:" and "TYPE:". This function is intended to be replaced or augmented with calls to a more robust ZW schema validator or the `zw_parser.validate_zw()` function as the ZW protocol matures.
+    -   **Output Folders:**
+        -   Valid files are copied to `zw_drop_folder/validated_patterns/`.
+        -   A log of all processed files (both validated and rejected) with timestamps and validation messages is appended to `zw_drop_folder/research_notes/what_worked.md`.
+    -   **Operation:** The script continuously polls the watch folder every 3 seconds. It keeps track of files it has already seen in the current session to only process new additions.
+    -   **Directory Setup:** On startup, the script will attempt to create the `WATCH_FOLDER`, `VALIDATED_FOLDER`, and the directory for `RESEARCH_LOG` (`zw_drop_folder/research_notes/`) if they don't already exist. These paths are rooted in a `zw_drop_folder` created at the project root level.
+
+-   **How to Run:**
+    1.  Navigate to the root directory of the ZW MCP project in your terminal.
+    2.  Ensure the `tools/` directory and `zw_import_watcher.py` script are present.
+    3.  Run the script using Python:
+        ```bash
+        python tools/zw_import_watcher.py
+        ```
+    4.  The script will start monitoring the `zw_drop_folder/experimental_patterns/` directory.
+    5.  To stop the watcher, press `Ctrl+C` in the terminal where it's running.
+
+-   **Expected Directory Structure for Operation (created by the script if not present, relative to project root):**
+    ```
+    zw_drop_folder/
+    ├── experimental_patterns/   # Drop new .zw files here
+    ├── validated_patterns/      # Valid .zw files are copied here
+    └── research_notes/
+        └── what_worked.md       # Log of processing results
+    ```
+
+-   **Note:** This script is primarily for development and pattern management workflows. The paths and validation logic are currently hardcoded but could be made configurable in future versions.
+
 [end of README.md]
