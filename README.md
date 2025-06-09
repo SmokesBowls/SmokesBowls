@@ -1204,7 +1204,7 @@ ZW-LIGHT:
 
 This addition allows ZW to define not just the subjects of a scene, but also how they are viewed and illuminated, completing a more comprehensive scene description toolset.
 
-### Phase 6.10: Procedural Meshes with `ZW-MESH` (Foundation)
+### Phase 6.10: Procedural Meshes with `ZW-MESH` (UVs, Textures, Export)
 
 This phase introduces the `ZW-MESH:` block, allowing for the definition of 3D meshes through a procedural pipeline. This involves specifying a base primitive, a series of deformations, and material properties, all processed by a dedicated Python module (`zw_mesh.py`) called by the main `blender_adapter.py`.
 
@@ -1240,11 +1240,21 @@ ZW-MESH: // This key's value should be the dictionary of attributes below
     BASE_COLOR: "<#RRGGBB>" | "(R,G,B,A)"
     EMISSION: <Float>             // Emission strength
     EMISSION_COLOR: "<#RRGGBB>" | "(R,G,B,A)" // Optional: color for emission
+    TEXTURE:                      // Optional: Texture definition for the material
+      TYPE: <image|noise|etc.>   // Type of texture
+      FILE: "<path/to/image.png>" // (For TYPE: image) Path to image file, relative to project root
+      MAPPING: <UV|GENERATED|etc.> // (For TYPE: image, optional) Default: UV
+      SCALE: "(u,v)"              // (For TYPE: image, optional) UV scale as string tuple, e.g., "(2.0, 2.0)"
+      STRENGTH: <Float>           // (For TYPE: noise, optional) Strength/influence of noise
+      TEX_SCALE: <Float>          // (For TYPE: noise, optional) Scale of the noise texture itself
     // ... other BSDF params from Phase 6.3 could be nested here if `zw_mesh.py` supports them ...
   LOCATION: "(x, y, z)"           // Optional: World-space location
   ROTATION: "(rx, ry, rz)"        // Optional: Euler rotation in degrees
   SCALE: "(sx, sy, sz)"           // Optional: Scale factors
   COLLECTION: <CollectionNameString> // Optional: Assign to a specific collection
+  EXPORT:                         // Optional: Export definition for this mesh
+    FORMAT: <glb|obj|etc.>        // File format for export (currently 'glb' supported)
+    FILE: "<path/to/export_file>" // Output filepath, relative to project root (e.g., "exports/my_mesh.glb")
 ///
 ```
 
@@ -1259,9 +1269,18 @@ ZW-MESH: // This key's value should be the dictionary of attributes below
     -   `BASE_COLOR`: Hex string or tuple string.
     -   `EMISSION`: Emission strength (float).
     -   `EMISSION_COLOR` (Optional): Color for emission.
+    -   `TEXTURE` (Optional): A dictionary defining a texture to be applied to the material.
+        -   `TYPE`: Specifies the texture type (e.g., `"image"`, `"noise"`).
+        -   `FILE` (for `TYPE: "image"`): Path to the image file (e.g., `"assets/textures/my_texture.png"`).
+        -   `MAPPING` (for `TYPE: "image"`, Optional): Texture mapping method. `"UV"` implies automatic UV unwrapping (Smart UV Project) will be attempted if image texture is used. Defaults to `"UV"`.
+        -   `SCALE` (for `TYPE: "image"`, Optional): UV mapping scale as a string tuple `"(u,v)"`.
+        -   `STRENGTH`, `TEX_SCALE` (for `TYPE: "noise"`, Optional): Parameters for procedural noise texture.
     -   (Future: Could support a full `BSDF` block here if `zw_mesh.py`'s `apply_material` is expanded).
 -   **`LOCATION`, `ROTATION`, `SCALE`** (Optional): Standard transform attributes. Rotation is in degrees.
 -   **`COLLECTION`** (Optional): Assigns the created mesh object to a specific Blender collection.
+-   **`EXPORT`** (Optional): A dictionary defining export parameters for this mesh.
+    -   `FORMAT`: The desired file format (e.g., `"glb"`). Currently, only "glb" is supported.
+    -   `FILE`: The output file path (e.g., `"exports/my_model.glb"`), typically relative to the project root.
 
 #### How it Works in `blender_adapter.py` and `zw_mesh.py`:
 
@@ -1270,41 +1289,48 @@ ZW-MESH: // This key's value should be the dictionary of attributes below
 -   The `zw_mesh.handle_zw_mesh_block` function then orchestrates:
     1.  Calling `zw_mesh.create_base_mesh()` to generate the initial primitive in Blender based on `TYPE` and `PARAMS`.
     2.  Setting the object's `NAME`, `LOCATION`, `ROTATION`, and `SCALE`.
-    3.  If `DEFORMATIONS` are present, iterating through them and calling `zw_mesh.apply_deformations()` (which in turn calls specific helpers like `add_twist_deform`, `add_displace_deform`, `add_skin_deform` to add and configure Blender modifiers).
-    4.  If `MATERIAL` is defined, calling `zw_mesh.apply_material()` to create/assign a material and set its `BASE_COLOR` and basic `EMISSION` properties on the Principled BSDF node.
-    5.  Linking the final object to the appropriate Blender collection (passed as `current_bpy_collection` or determined by an explicit `COLLECTION` attribute in the `ZW-MESH` block).
-    6.  Includes error handling, creating a fallback "error cube" if the process fails.
+    3.  Before applying materials, if an image texture with UV mapping is specified in the `TEXTURE` block, it calls `add_uv_mapping(created_obj)` to perform a Smart UV Project.
+    4.  If `DEFORMATIONS` are present, iterating through them and calling `zw_mesh.apply_deformations()` (which in turn calls specific helpers like `add_twist_deform`, `add_displace_deform`, `add_skin_deform` to add and configure Blender modifiers).
+    5.  If `MATERIAL` is defined, calling `zw_mesh.apply_material()` (which calls `apply_texture_to_material_nodes`) now handles the `TEXTURE` block by creating and connecting appropriate shader nodes (Image Texture with UV/Mapping setup, or Noise Texture) to the Principled BSDF's Base Color input.
+    6.  Linking the final object to the appropriate Blender collection (passed as `current_bpy_collection` or determined by an explicit `COLLECTION` attribute in the `ZW-MESH` block).
+    7.  Includes error handling, creating a fallback "error cube" if the process fails.
+    8.  After all other processing, if an `EXPORT` block is present, it calls `export_to_glb(created_obj, export_filepath)` to save the object as a GLB file.
 
-#### Example (`Spirit_Tree_Test`):
+#### Example (`Crystalline_Stone`):
 
 ```zw
-// --- Test Case for ZW-MESH (Phase 8.5 / 6.10) ---
+// --- Test Case for ZW-MESH with Texture and Export (Phase 8.6) ---
 ZW-MESH:
-  NAME: Spirit_Tree_Test
-  TYPE: ico_sphere // Base primitive
+  NAME: Crystalline_Stone
+  TYPE: cylinder
   PARAMS:
-    SUBDIVISIONS: 3
-    RADIUS: 1.5
+    VERTICES: 12
+    RADIUS: 0.8
+    DEPTH: 2.5
   DEFORMATIONS:
-    - TYPE: twist
-      AXIS: Z
-      ANGLE: 60 // Degrees
     - TYPE: displace
-      TEXTURE: noise // Maps to a Blender texture like 'CLOUDS'
-      STRENGTH: 0.4
+      TEXTURE: noise
+      STRENGTH: 0.2
   MATERIAL:
-    NAME: SpiritGlowMaterial
-    BASE_COLOR: "#7FFFD4"    // Aquamarine
-    EMISSION: 1.2            // Emission strength
-    EMISSION_COLOR: "#9FFFFF" // Pale cyan/turquoise for emission
-  LOCATION: "(0.0, 0.0, 0.0)"
-  ROTATION: "(0.0, 0.0, 0.0)"
-  SCALE: "(1.0, 1.0, 1.0)"
-  COLLECTION: ProceduralObjects
+    NAME: StoneMat
+    BASE_COLOR: "#CCCCCC"
+    EMISSION: 0.1
+    TEXTURE:
+      TYPE: image
+      FILE: "assets/textures/stone_diffuse.png"
+      MAPPING: UV
+      SCALE: "(1.5, 1.5)"
+  LOCATION: "(2.0, 0.0, 1.25)"
+  ROTATION: "(0,0,0)"
+  SCALE: "(1,1,1)"
+  COLLECTION: ProceduralAssets
+  EXPORT:
+    FORMAT: glb
+    FILE: "exports/crystalline_stone.glb"
 ///
 ```
 
-This `ZW-MESH` system forms the foundation for a powerful procedural geometry pipeline driven by ZW, enabling complex shapes and objects to be generated from structured text descriptions. The current implementation in `zw_mesh.py` supports icospheres, cylinders, and grids as base meshes, with scaffolding for twist, displace, and skin deformations, alongside basic material application.
+This `ZW-MESH` system forms the foundation for a powerful procedural geometry pipeline driven by ZW, enabling complex shapes and objects to be generated from structured text descriptions. The `zw_mesh.py` module now supports icospheres, cylinders, grids, cubes, and cones as base meshes; twist, displace, and skin deformations; material application including image and procedural noise textures with UV unwrapping for image textures; and exporting the final mesh to GLB format.
 
 ---
 ## Phase 6.5: ZW Roundtrip (Blender to ZW Export)

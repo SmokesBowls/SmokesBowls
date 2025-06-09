@@ -164,3 +164,33 @@ ZW-MESH:
   ROTATION: "(0.0, 0.0, 0.0)" // Using string tuple for consistency with how adapter might handle it
   SCALE: "(1.0, 1.0, 1.0)"  // Using string tuple
 ///
+
+// --- Test Case for ZW-MESH with Texture and Export (Phase 8.6) ---
+ZW-MESH:
+  NAME: Crystalline_Stone
+  TYPE: cylinder // Base primitive. zw_mesh.py create_base_mesh should handle this.
+  PARAMS:
+    VERTICES: 12
+    RADIUS: 0.8
+    DEPTH: 2.5
+  DEFORMATIONS:
+    - TYPE: displace
+      TEXTURE: noise // This will be handled by add_displace_deform, mapping "noise" to a Blender texture.
+      STRENGTH: 0.2
+  MATERIAL:
+    NAME: StoneMat          // Explicit name for the material
+    BASE_COLOR: "#CCCCCC"   // Light gray
+    EMISSION: 0.1           // Slight emission
+    TEXTURE:                // Texture definition block
+      TYPE: image
+      FILE: "assets/textures/stone_diffuse.png" // Path relative to project root
+      MAPPING: UV           // Indicates UV unwrapping is needed
+      SCALE: "(1.5, 1.5)"   // UV scale as a string tuple
+  LOCATION: "(2.0, 0.0, 1.25)" // Adjusted Z location assuming depth creates height from origin
+  ROTATION: "(0,0,0)"         // Default rotation
+  SCALE: "(1,1,1)"            // Default scale
+  COLLECTION: ProceduralAssets // Assign to a collection
+  EXPORT:                     // Export definition block
+    FORMAT: glb
+    FILE: "exports/crystalline_stone.glb" // Path relative to project root
+///
