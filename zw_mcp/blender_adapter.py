@@ -4,6 +4,8 @@ import json # For potential pretty printing if needed, not directly for to_zw
 from pathlib import Path
 import argparse
 import math # Added for math.radians
+from pathlib import Path # Ensure Path is imported for handle_zw_compose_block
+from mathutils import Vector, Euler # For ZW-COMPOSE transforms
 
 # Attempt to import bpy, handling the case where the script is not run within Blender
 try:
@@ -54,6 +56,39 @@ except ImportError:
             def HANDLE_ZW_MESH_BLOCK_FUNC(mesh_def_dict, collection_context=None): # Ensure dummy has same signature
                 print("[Critical Error] zw_mesh.handle_zw_mesh_block was not imported. Cannot process ZW-MESH.")
                 return None
+
+# --- Imports for zw_mesh utilities needed by ZW-COMPOSE ---
+APPLY_ZW_MESH_MATERIAL_FUNC = None
+EXPORT_ZW_MESH_TO_GLB_FUNC = None
+ZW_MESH_UTILS_IMPORTED = False
+try:
+    from .zw_mesh import apply_material as imported_apply_material, export_to_glb as imported_export_glb
+    APPLY_ZW_MESH_MATERIAL_FUNC = imported_apply_material
+    EXPORT_ZW_MESH_TO_GLB_FUNC = imported_export_glb
+    ZW_MESH_UTILS_IMPORTED = True
+    print("Successfully imported apply_material, export_to_glb from .zw_mesh (relative).")
+except ImportError:
+    try:
+        from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material, export_to_glb as pkg_imported_export_glb
+        APPLY_ZW_MESH_MATERIAL_FUNC = pkg_imported_apply_material
+        EXPORT_ZW_MESH_TO_GLB_FUNC = pkg_imported_export_glb
+        ZW_MESH_UTILS_IMPORTED = True
+        print("Successfully imported apply_material, export_to_glb from zw_mcp.zw_mesh (package).")
+    except ImportError as e_pkg_utils:
+        print(f"Failed package import of zw_mesh utils: {e_pkg_utils}")
+        try:
+            from zw_mesh import apply_material as direct_imported_apply_material, export_to_glb as direct_imported_export_glb
+            APPLY_ZW_MESH_MATERIAL_FUNC = direct_imported_apply_material
+            EXPORT_ZW_MESH_TO_GLB_FUNC = direct_imported_export_glb
+            ZW_MESH_UTILS_IMPORTED = True
+            print("Successfully imported zw_mesh utils (direct from script directory - fallback).")
+        except ImportError as e_direct_utils:
+            print(f"All import attempts for zw_mesh utils (apply_material, export_to_glb) failed: {e_direct_utils}")
+            # Define dummies if import failed
+            def APPLY_ZW_MESH_MATERIAL_FUNC(obj, material_def):
+                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
+            def EXPORT_ZW_MESH_TO_GLB_FUNC(blender_obj, export_filepath_str):
+                print("[Critical Error] zw_mesh.export_to_glb was not imported. Cannot export in ZW-COMPOSE.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")
 
@@ -942,6 +977,178 @@ def run_blender_adapter():
         print("[*] Finished processing ZW structure.")
     except Exception as e: print(f"[X] Error during ZW structure processing for Blender: {e}"); print("--- ZW Blender Adapter Finished (with errors) ---"); return
     print("--- ZW Blender Adapter Finished Successfully ---")
+
+# --- ZW-COMPOSE Handler ---
+def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
+    if not bpy:
+        print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
+        return
+
+    compose_name = compose_data.get("NAME", "ZWComposition")
+    print(f"    Creating ZW-COMPOSE assembly: {compose_name}")
+
+    # Create parent Empty for the composition
+    bpy.ops.object.empty_add(type='PLAIN_AXES')
+    parent_empty = bpy.context.active_object
+    if not parent_empty: # Should not happen if ops.empty_add worked
+        print(f"      [Error] Failed to create parent Empty for {compose_name}. Aborting ZW-COMPOSE.")
+        return
+    parent_empty.name = compose_name
+
+    # Handle transform for the parent_empty itself
+    loc_str = compose_data.get("LOCATION", "(0,0,0)")
+    rot_str = compose_data.get("ROTATION", "(0,0,0)")
+    scale_str = compose_data.get("SCALE", "(1,1,1)")
+    parent_empty.location = safe_eval(loc_str, (0,0,0))
+    rot_deg = safe_eval(rot_str, (0,0,0))
+    parent_empty.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+
+    scale_eval = safe_eval(scale_str, (1,1,1))
+    if isinstance(scale_eval, (int, float)): # Uniform scale
+        parent_empty.scale = (float(scale_eval), float(scale_eval), float(scale_eval))
+    else: # Tuple scale
+        parent_empty.scale = scale_eval
+    print(f"      Parent Empty '{parent_empty.name}' transform: L={parent_empty.location}, R={parent_empty.rotation_euler}, S={parent_empty.scale}")
+
+
+    # Assign parent_empty to a collection
+    comp_coll_name = compose_data.get("COLLECTION")
+    target_collection_for_empty = default_collection # Default to the collection context from process_zw_structure
+
+    if comp_coll_name: # If a specific collection is named for the ZW-COMPOSE root
+        target_collection_for_empty = get_or_create_collection(comp_coll_name, parent_collection=bpy.context.scene.collection)
+
+    # Link parent_empty to its target collection, ensure it's not in others (like default scene collection)
+    current_collections = [coll for coll in parent_empty.users_collection]
+    for coll in current_collections:
+        coll.objects.unlink(parent_empty)
+    if parent_empty.name not in target_collection_for_empty.objects: # Check to avoid duplicate link error
+        target_collection_for_empty.objects.link(parent_empty)
+    print(f"      Parent Empty '{parent_empty.name}' linked to collection '{target_collection_for_empty.name}'")
+
+
+    # Process BASE_MODEL
+    base_model_name = compose_data.get("BASE_MODEL")
+    base_model_obj = None
+    if base_model_name:
+        original_base_obj = bpy.data.objects.get(base_model_name)
+        if original_base_obj:
+            # Duplicate the object and its data to make it independent for this composition
+            base_model_obj = original_base_obj.copy()
+            if original_base_obj.data:
+                base_model_obj.data = original_base_obj.data.copy()
+            base_model_obj.name = f"{base_model_name}_base_of_{compose_name}"
+
+            # Link duplicated base_model_obj to the same collection as parent_empty
+            target_collection_for_empty.objects.link(base_model_obj)
+
+            base_model_obj.parent = parent_empty
+            base_model_obj.location = (0,0,0) # Reset local transforms relative to parent_empty
+            base_model_obj.rotation_euler = (0,0,0)
+            base_model_obj.scale = (1,1,1)
+            print(f"      Added BASE_MODEL: '{base_model_name}' as '{base_model_obj.name}', parented to '{parent_empty.name}'")
+        else:
+            print(f"      [Warning] BASE_MODEL object '{base_model_name}' not found in scene.")
+
+    # Process ATTACHMENTS
+    attachments_list = compose_data.get("ATTACHMENTS", [])
+    if not isinstance(attachments_list, list): attachments_list = []
+
+    for i, attach_def in enumerate(attachments_list):
+        if not isinstance(attach_def, dict):
+            print(f"        [Warning] Attachment item {i} is not a dictionary, skipping.")
+            continue
+
+        attach_obj_source_name = attach_def.get("OBJECT")
+        original_attach_obj = bpy.data.objects.get(attach_obj_source_name)
+
+        if original_attach_obj:
+            attached_obj = original_attach_obj.copy()
+            if original_attach_obj.data:
+                attached_obj.data = original_attach_obj.data.copy()
+            attached_obj.name = f"{attach_obj_source_name}_attach{i}_to_{compose_name}"
+            target_collection_for_empty.objects.link(attached_obj) # Link to same collection as parent_empty
+
+            attached_obj.parent = parent_empty # Parent to the main composition Empty
+
+            # Apply local transforms for the attachment
+            attach_loc_str = attach_def.get("LOCATION", "(0,0,0)")
+            attach_rot_str = attach_def.get("ROTATION", "(0,0,0)")
+            attach_scale_str = attach_def.get("SCALE", "(1,1,1)")
+
+            attached_obj.location = safe_eval(attach_loc_str, (0,0,0))
+            attach_rot_deg = safe_eval(attach_rot_str, (0,0,0))
+            attached_obj.rotation_euler = Euler([math.radians(a) for a in attach_rot_deg], 'XYZ')
+
+            attach_scale_eval = safe_eval(attach_scale_str, (1,1,1))
+            if isinstance(attach_scale_eval, (int, float)):
+                attached_obj.scale = (float(attach_scale_eval), float(attach_scale_eval), float(attach_scale_eval))
+            else:
+                attached_obj.scale = attach_scale_eval
+            print(f"        Added ATTACHMENT: '{attach_obj_source_name}' as '{attached_obj.name}', parented to '{parent_empty.name}'")
+            print(f"          Local Transform: L={attached_obj.location}, R={attached_obj.rotation_euler}, S={attached_obj.scale}")
+
+
+            # Handle MATERIAL_OVERRIDE for this attachment
+            material_override_def = attach_def.get("MATERIAL_OVERRIDE")
+            if isinstance(material_override_def, dict):
+                if ZW_MESH_UTILS_IMPORTED and APPLY_ZW_MESH_MATERIAL_FUNC:
+                    print(f"          Applying MATERIAL_OVERRIDE to '{attached_obj.name}'")
+                    if 'NAME' not in material_override_def:
+                        material_override_def['NAME'] = f"{attached_obj.name}_OverrideMat"
+                    APPLY_ZW_MESH_MATERIAL_FUNC(attached_obj, material_override_def)
+                else:
+                    print(f"          [Warning] MATERIAL_OVERRIDE found for '{attached_obj.name}', but zw_mesh.apply_material function was not imported.")
+        else:
+            print(f"        [Warning] ATTACHMENT source object '{attach_obj_source_name}' not found.")
+
+    # Process EXPORT for the entire assembly
+    export_def = compose_data.get("EXPORT")
+    if export_def and isinstance(export_def, dict):
+        export_format = export_def.get("FORMAT", "").lower()
+        export_file_str = export_def.get("FILE")
+        if export_format == "glb" and export_file_str:
+            print(f"      Exporting composition '{compose_name}' to GLB: {export_file_str}")
+
+            export_path = Path(export_file_str)
+            # Attempt to make path absolute relative to a project root if not already.
+            # This part assumes PROJECT_ROOT might be defined globally in blender_adapter.py or passed.
+            # For now, we'll rely on Blender's relative path handling or user providing absolute paths.
+            # if not export_path.is_absolute() and 'PROJECT_ROOT' in globals():
+            #     export_path = PROJECT_ROOT / export_path
+
+            try:
+                export_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception as e_mkdir_export:
+                print(f"        [Warning] Could not create directory for GLB export '{export_path.parent}': {e_mkdir_export}")
+
+            # Select parent_empty and all its children for export
+            bpy.ops.object.select_all(action='DESELECT')
+            parent_empty.select_set(True) # Select the parent empty
+            # Also select all children recursively
+            for child in parent_empty.children_recursive:
+                child.select_set(True)
+            bpy.context.view_layer.objects.active = parent_empty # Ensure parent is active for some export options
+
+            try:
+                bpy.ops.export_scene.gltf(
+                    filepath=str(export_path), # Use str() for older Blender versions if Path object not fully supported by op
+                    export_format='GLB',
+                    use_selection=True,
+                    export_apply=True,  # Apply modifiers
+                    export_materials='EXPORT',
+                    export_texcoords=True,
+                    export_normals=True,
+                    export_cameras=False, # Usually False for component exports
+                    export_lights=False   # Usually False for component exports
+                )
+                print(f"        Successfully exported composition '{compose_name}' to '{export_path.resolve() if export_path.exists() else export_path}'") # Check if resolve() is safe if file creation failed
+            except RuntimeError as e_export:
+                print(f"        [Error] Failed to export composition '{compose_name}' to GLB: {e_export}")
+        else:
+            print(f"      [Warning] EXPORT block for '{compose_name}' is missing format/file or format not 'glb'.")
+    print(f"    ✅ Finished ZW-COMPOSE assembly: {compose_name}")
+
 
 if __name__ == "__main__":
     run_blender_adapter()

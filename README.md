@@ -1662,4 +1662,127 @@ This section covers utility scripts that support the development, testing, and m
 
 -   **Note:** This script is primarily for development and pattern management workflows. The paths and validation logic are currently hardcoded but could be made configurable in future versions. Internally, it uses `pathlib` for robust cross-platform path management and ensures UTF-8 encoding for file operations.
 
+---
+## Phase 9.0: Scene Assembly with `ZW-COMPOSE` (Foundation)
+
+This phase introduces the `ZW-COMPOSE` block, a powerful directive that allows for the assembly of complex objects or entire scenes by referencing, instancing, transforming, and overriding materials of pre-defined ZW components (created via `ZW-OBJECT` or `ZW-MESH`). This facilitates modular design and is a key step towards AI-driven scene construction where an AI can generate a `ZW-COMPOSE` block to build scenes from a library of parts or procedural elements.
+
+### ZW Syntax for Scene Composition (`ZW-COMPOSE`):
+
+A `ZW-COMPOSE` block defines an assembly, typically resulting in a new parent Empty object in Blender that holds all the composed parts.
+
+```zw
+ZW-COMPOSE:
+  NAME: <CompositionNameString>     // Name for the parent Empty of the assembly
+  LOCATION: "(x, y, z)"            // Optional: Location for the parent Empty
+  ROTATION: "(rx, ry, rz)"         // Optional: Rotation for the parent Empty (degrees)
+  SCALE: "(sx, sy, sz)"            // Optional: Scale for the parent Empty
+  COLLECTION: <CollectionNameString> // Optional: Collection for the parent Empty
+
+  BASE_MODEL: <ZW_EntityNameString>  // NAME of a ZW-OBJECT or ZW-MESH to use as the base
+
+  ATTACHMENTS:                      // Optional: List of parts to attach to the base/parent
+    - OBJECT: <ZW_EntityNameString> // NAME of a ZW-OBJECT or ZW-MESH to attach
+      LOCATION: "(x, y, z)"        // Optional: Local position relative to the parent Empty
+      ROTATION: "(rx, ry, rz)"     // Optional: Local rotation (degrees)
+      SCALE: "(sx, sy, sz)"        // Optional: Local scale
+      MATERIAL_OVERRIDE:           // Optional: Override material for this attached instance
+        NAME: <NewMaterialName>
+        BASE_COLOR: "<#RRGGBB>" | "(R,G,B,A)"
+        EMISSION: <Float>
+        EMISSION_COLOR: "<#RRGGBB>" | "(R,G,B,A)"
+        // Potentially full BSDF or TEXTURE block here in future
+    // ... more attachments ...
+
+  EXPORT:                           // Optional: Export the entire composed assembly
+    FORMAT: glb
+    FILE: "exports/<filename>.glb"
+///
+```
+
+-   **`NAME`**: The name for the top-level parent Empty object that will hold the entire assembly.
+-   **`LOCATION`, `ROTATION`, `SCALE`** (Optional, for the main assembly): Transform for the parent Empty. Rotations are in degrees.
+-   **`COLLECTION`** (Optional, for the main assembly): Collection for the parent Empty.
+-   **`BASE_MODEL`**: The `NAME` of a previously defined `ZW-OBJECT` or `ZW-MESH` that serves as the central part of the composition.
+-   **`ATTACHMENTS`**: A list of dictionaries, each defining an object to be attached:
+    -   `OBJECT`: The `NAME` of a previously defined `ZW-OBJECT` or `ZW-MESH`.
+    -   `LOCATION`, `ROTATION`, `SCALE` (Optional): Local transforms applied to this attachment, relative to the main assembly's parent Empty. Rotations are in degrees.
+    -   `MATERIAL_OVERRIDE` (Optional): A dictionary (similar in structure to the `MATERIAL` block in `ZW-MESH`) to define a unique material appearance for this specific attached instance.
+-   **`EXPORT`** (Optional): If present, exports the entire assembled group (the parent Empty and all its children) to the specified format and file. Currently supports `FORMAT: glb`.
+
+### How it Works in `blender_adapter.py`:
+
+-   The `process_zw_structure` function now recognizes `ZW-COMPOSE` keys.
+-   It calls `handle_zw_compose_block(compose_data_dict, current_bpy_collection)`:
+    1.  Creates a new parent Empty object in Blender, named and transformed according to the `ZW-COMPOSE` block's `NAME`, `LOCATION`, `ROTATION`, and `SCALE`. This Empty is linked to the specified or current collection.
+    2.  **Base Model Processing**:
+        -   Finds the Blender object corresponding to the `BASE_MODEL` name.
+        -   Duplicates this object (including its mesh data, making it independent for this composition).
+        -   Parents the duplicated base model to the main parent Empty and resets its local transforms (so its world position is initially that of the Empty).
+    3.  **Attachment Processing**:
+        -   For each item in the `ATTACHMENTS` list:
+            -   Finds the Blender object for the specified `OBJECT` name.
+            -   Duplicates it (including mesh data).
+            -   Parents the duplicated attachment to the main parent Empty.
+            -   Applies the local `LOCATION`, `ROTATION` (converted to radians), and `SCALE` from the attachment definition to this new instance.
+            -   If a `MATERIAL_OVERRIDE` is defined, the `apply_material` function (from `zw_mesh.py`, or a similar utility) is used to apply these specific material properties to this instance of the attachment.
+    4.  **Export**: If an `EXPORT` block is present:
+        -   Selects the main parent Empty and all its children recursively.
+        -   Uses `bpy.ops.export_scene.gltf()` to export the selected hierarchy to a `.glb` file.
+
+### Example (`CrystalShrine_Assembly`):
+
+First, ensure these `ZW-MESH` components are defined earlier in your `.zw` file:
+```zw
+ZW-MESH:
+  NAME: Base_Shrine
+  TYPE: cylinder
+  PARAMS: {VERTICES: 24, RADIUS: 2.0, DEPTH: 0.6}
+  MATERIAL: {NAME: ShrineStoneMat, BASE_COLOR: "#8B8B8B", EMISSION: 0.05}
+  COLLECTION: ShrineParts
+///
+ZW-MESH:
+  NAME: Crystal_Top
+  TYPE: ico_sphere
+  PARAMS: {SUBDIVISIONS: 2, RADIUS: 0.5}
+  MATERIAL: {NAME: CrystalMat, BASE_COLOR: "#A3FFD3", EMISSION: 1.2}
+  COLLECTION: ShrineParts
+///
+ZW-MESH:
+  NAME: Side_Shard
+  TYPE: cone
+  PARAMS: {VERTICES: 8, RADIUS1: 0.15, RADIUS2: 0.0, DEPTH: 0.7}
+  MATERIAL: {NAME: ShardMat, BASE_COLOR: "#00FFFF", EMISSION: 0.7}
+  COLLECTION: ShrineParts
+///
+```
+Then, the `ZW-COMPOSE` block can assemble them:
+```zw
+ZW-COMPOSE:
+  NAME: CrystalShrine_Assembly
+  BASE_MODEL: Base_Shrine
+  LOCATION: "(0, 15, 0)"
+  ROTATION: "(0,0,15)"
+  COLLECTION: ComposedScenes
+  ATTACHMENTS:
+    - OBJECT: Crystal_Top
+      LOCATION: "(0.0, 0.0, 0.5)"
+      ROTATION: "(0.0, 0.0, 0.0)"
+      SCALE: "(1.0, 1.0, 1.0)"
+    - OBJECT: Side_Shard
+      LOCATION: "(1.2, 0.0, 0.3)"
+      ROTATION: "(0.0, 90, 10)"
+      SCALE: "(0.8, 0.8, 1.0)"
+      MATERIAL_OVERRIDE:
+        NAME: OverriddenShardMat
+        BASE_COLOR: "#FF66CC"
+        EMISSION: 1.5
+  EXPORT:
+    FORMAT: glb
+    FILE: "exports/crystal_shrine_assembly.glb"
+///
+```
+
+This `ZW-COMPOSE` feature allows for building complex, hierarchical models from smaller, reusable ZW components, and is a key enabler for more sophisticated AI-driven design and scene generation.
+
 [end of README.md]
