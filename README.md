@@ -1913,4 +1913,63 @@ ZW-COMPOSE-TEMPLATE:
 
 This system moves towards a more generative and AI-friendly approach, where ZW defines not just explicit scenes but also the rules, components, and templates for creating a multitude of scene variations. The `blender_adapter.py` does not need new ZW block *handlers* for this phase, as it already processes the `ZW-COMPOSE` output by the template engine. The primary new code is in `zw_mcp/handlers/template_engine.py`.
 
+### Using the Smart Assembler (`zw_mcp/smart_assembler.py`)
+
+To facilitate the use of the `ZWTemplateEngine` and `ZWMetadataRegistry`, a command-line interface (CLI) tool named `smart_assembler.py` is provided. This script allows users to generate concrete `ZW-COMPOSE` blocks from templates and a library of ZW parts directly from the terminal.
+
+#### Purpose:
+
+The `smart_assembler.py` script orchestrates the following:
+1.  Loads a library of ZW parts (containing `ZW-MESH` or `ZW-OBJECT` definitions with inline `METADATA`) from a specified directory.
+2.  Builds a `ZWMetadataRegistry` from these parts.
+3.  Loads a `ZW-COMPOSE-TEMPLATE` from a specified `.zw` file.
+4.  Uses the `ZWTemplateEngine` to fill the template's slots with matching parts from the registry, based on a chosen selection strategy.
+5.  Outputs the resulting concrete `ZW-COMPOSE` block as a ZW string, which can then be saved to a file or piped to other processes. This output is directly usable by `blender_adapter.py` to construct the scene in Blender.
+
+#### Command-Line Arguments:
+
+The script is run using `python zw_mcp/smart_assembler.py` (assuming you are in the project root, or adjust path accordingly) with the following arguments:
+
+-   `--template <path>` or `-t <path>`: **(Required)** Path to the `.zw` file containing the `ZW-COMPOSE-TEMPLATE` definition.
+    (e.g., `zw_mcp/templates/altar_template.zw`)
+-   `--mesh-dir <directory_path>` or `-m <directory_path>`: Path to the directory containing `.zw` files with ZW part definitions (e.g., `ZW-MESH` blocks with `METADATA`).
+    (Defaults to: `zw_mcp/mesh`)
+-   `--output <filepath>` or `-o <filepath>`: Optional. Path to save the generated `ZW-COMPOSE` ZW string. If omitted, the output is printed to standard output (stdout).
+    (e.g., `exports/generated_altar_composition.zw`)
+-   `--strategy <random|first|best_fit>` or `-s <random|first|best_fit>`: Selection strategy for the template engine to use when multiple parts match a slot's criteria.
+    (Defaults to: `best_fit`)
+-   `--save-index <filepath>`: Optional. If specified, saves the loaded metadata registry's index (object metadata and tags) to this JSON file path for inspection or faster subsequent loading by other tools.
+    (e.g., `zw_mcp/meta_output/registry_index.json`)
+-   `--list-tags`: Optional flag. If present, the script will load the mesh directory, list all unique tags found in the parts' metadata along with the number of objects associated with each tag and some examples, and then exit. Useful for understanding the available vocabulary for templates.
+-   `--verbose` or `-v`: Optional flag. Enables more detailed console output during processing, showing steps like registry loading, template parsing, and slot filling.
+-   `--help` or `-h`: Displays help information about the arguments.
+
+#### Usage Examples:
+
+1.  **Generate a composition and print to console (using default mesh directory and best_fit strategy):**
+    ```bash
+    python zw_mcp/smart_assembler.py -t zw_mcp/templates/altar_template.zw
+    ```
+
+2.  **Generate a composition and save to a file, using 'random' strategy and verbose output:**
+    ```bash
+    python zw_mcp/smart_assembler.py -t zw_mcp/templates/altar_template.zw -m zw_mcp/mesh -o exports/my_altar.zw -s random -v
+    ```
+
+3.  **List all available tags from the default mesh parts directory:**
+    ```bash
+    python zw_mcp/smart_assembler.py --list-tags
+    ```
+
+4.  **Generate a composition and also save the metadata registry index:**
+    ```bash
+    python zw_mcp/smart_assembler.py -t zw_mcp/templates/altar_template.zw --save-index zw_mcp/meta_output/current_registry.json -o exports/another_altar.zw
+    ```
+
+#### First-Time Use & Sample Files:
+
+The `smart_assembler.py` script includes a utility (`create_sample_files()`) that attempts to create basic example template and part files (`zw_mcp/templates/simple_altar.zw` and `zw_mcp/mesh/basic_parts.zw`) if it detects that the `zw_mcp/templates` directory doesn't exist when the script is run. This helps users get started quickly and provides a simple test case.
+
+This CLI tool serves as the primary user interface for the template engine, bridging the gap between abstract scene templates, libraries of tagged ZW components, and the generation of concrete ZW scene descriptions ready for rendering or further processing.
+
 [end of README.md]
