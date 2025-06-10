@@ -1785,4 +1785,132 @@ ZW-COMPOSE:
 
 This `ZW-COMPOSE` feature allows for building complex, hierarchical models from smaller, reusable ZW components, and is a key enabler for more sophisticated AI-driven design and scene generation.
 
+---
+## Phase 9.1: Intelligent Scene Assembly with Templates & Metadata
+
+This phase builds upon `ZW-COMPOSE` by introducing a system for more intelligent and flexible scene assembly. It involves defining **scene templates** (`ZW-COMPOSE-TEMPLATE`) with named slots that have requirements, and **metadata** (`ZW-METADATA`) for ZW components (like `ZW-MESH` or `ZW-OBJECT`) that allow them to be matched to these slots. A new Python module, `template_engine.py`, provides the logic for this matching and for generating concrete `ZW-COMPOSE` blocks.
+
+This enables an AI or higher-level system to design scenes by selecting appropriate, semantically tagged parts from a library to fill roles within a template, rather than defining every component explicitly from scratch.
+
+### New ZW Block: `ZW-COMPOSE-TEMPLATE`
+
+-   **Purpose:** Defines an assembly blueprint with abstract "slots" that need to be filled by ZW components matching certain criteria.
+-   **Syntax:**
+    ```zw
+    ZW-COMPOSE-TEMPLATE:
+      NAME: <TemplateNameString>      // e.g., Sky_Altar_Template_v1
+      // COLLECTION: <DefaultCollectionForComposedObject> // Optional: Default collection for the final assembly
+      SLOTS:                         // List of slot definitions
+        - ID: <SlotIDString>         // Unique identifier for this slot within the template (e.g., "AltarBase")
+          ROLE: <RoleDescriptionString> // Semantic role of the part in this slot (e.g., "foundation_structure")
+          REQUIRED_TAGS: [<tag1>, <tag2>, ...] // List of tags a ZW component must have in its metadata to fill this slot
+          OPTIONAL_TAGS: [<tagA>, <tagB>, ...] // Optional: Tags for preferred but not mandatory matching
+          COUNT: <Integer>            // How many instances for this slot (default 1). Engine might pick N distinct or N same.
+          LOCAL_TRANSFORM:          // Transform for the object filling this slot, relative to the template's origin
+            LOCATION: "(x, y, z)"
+            ROTATION: "(rx, ry, rz)"  // Degrees
+            SCALE: "(sx, sy, sz)"
+          // MATERIAL_OVERRIDE: { ... } // Optional: Override material for objects in this slot
+        // ... more slots ...
+      // CONSTRAINTS: // Future: Define relationships or rules between slots
+      // STYLE_HINTS: // Future: Global style guidance for AI filling the template
+    ///
+    ```
+    *(The `zw_parser.py` is expected to parse this structure into a corresponding dictionary).*
+
+### New ZW Block / Sub-Block: `ZW-METADATA` / `METADATA`
+
+-   **Purpose:** Attaches semantic tags, suitability information, and other descriptive metadata to ZW components (`ZW-MESH` or `ZW-OBJECT`) to enable intelligent selection by the template engine or other systems.
+-   **Syntax (Inline within `ZW-MESH` or `ZW-OBJECT`):**
+    ```zw
+    ZW-MESH: // Or ZW-OBJECT:
+      NAME: <ComponentNameString>
+      // ... other component attributes (TYPE, PARAMS, MATERIAL, etc.) ...
+      METADATA:
+        TAGS: [<tag1>, <tag2>, "descriptive_tag"] // List of keywords
+        SUITABILITY: [<role1>, <role2>]         // List of roles this part is good for
+        DESCRIPTION: "<Textual description>"     // Optional human-readable info
+        // ... other custom metadata fields ...
+    ///
+    ```
+-   **Syntax (Standalone - less common for parts, more for global scene metadata if needed):**
+    ```zw
+    ZW-METADATA:
+      TARGET: <ComponentNameString> // Links metadata to a ZW component defined elsewhere
+      TAGS: [...]
+      SUITABILITY: [...]
+      // ...
+    ///
+    ```
+    *(The inline `METADATA:` sub-block within component definitions is the primary method for tagging parts).*
+
+### New Module: `zw_mcp/handlers/template_engine.py`
+
+This Python module provides the core logic for intelligent assembly:
+
+-   **`ZWMetadataRegistry` Class:**
+    -   Manages a catalog of ZW components (loaded from `.zw` part files).
+    -   Stores each component's full ZW definition and its extracted metadata.
+    -   Indexes components by their tags for efficient searching (`find_by_tags()`).
+-   **`ZWTemplateEngine` Class:**
+    -   `parse_template(template_data)`: Parses the dictionary from a `ZW-COMPOSE-TEMPLATE` block.
+    -   `select_for_slot(slot_definition, strategy)`: Selects a suitable component name from the `ZWMetadataRegistry` that matches the `REQUIRED_TAGS` (and potentially `ROLE`, `OPTIONAL_TAGS`) of a given template slot. Supports different selection strategies (e.g., random, first match).
+    -   `compose_from_template(template_data, strategy)`: The main function. Takes a parsed `ZW-COMPOSE-TEMPLATE` definition, uses the registry and slot selection logic to choose components for each slot, and generates a concrete `ZW-COMPOSE` block (as a Python dictionary) ready to be processed by `blender_adapter.py`.
+-   **Utility Functions:**
+    -   `load_mesh_registry_from_files(parts_directory_path)`: Scans a directory for `.zw` files, parses them (using `zw_parser.parse_zw`), and populates a `ZWMetadataRegistry` with all found `ZW-MESH` and `ZW-OBJECT` definitions that include inline `METADATA`.
+    -   `save_registry_index(registry, output_path)`: (Optional) Saves the tag index and object metadata for faster loading or external inspection.
+
+### Intended Workflow & Scene Generation:
+
+1.  **Define Parts**: Create multiple `.zw` files (e.g., in `zw_mcp/mesh/`) defining various `ZW-MESH` or `ZW-OBJECT` components. Each component should have an inline `METADATA:` block with descriptive `TAGS` and `SUITABILITY` hints.
+2.  **Define Templates**: Create `.zw` files (e.g., in `zw_mcp/templates/`) containing `ZW-COMPOSE-TEMPLATE:` definitions with named slots and their `REQUIRED_TAGS`.
+3.  **Run Template Engine**:
+    -   A script (like the `if __name__ == "__main__":` block in `template_engine.py`, or a higher-level AI agent script) would:
+        a.  Initialize `ZWMetadataRegistry`.
+        b.  Call `load_mesh_registry_from_files()` to populate the registry from your parts directory.
+        c.  Load a `ZW-COMPOSE-TEMPLATE` file and parse it.
+        d.  Initialize `ZWTemplateEngine` with the populated registry.
+        e.  Call `engine.compose_from_template()` with the parsed template data.
+4.  **Output**: The template engine generates a Python dictionary representing a concrete `ZW-COMPOSE` block.
+5.  **Blender Processing**: This generated `ZW-COMPOSE` dictionary can then be:
+    -   Serialized to a new `.zw` file and processed by `blender_adapter.py` from the command line.
+    -   Passed directly to `blender_adapter.py`'s `handle_zw_compose_block` if the template engine is being used as a library within a larger Blender scripting environment.
+    The `blender_adapter.py` then builds the scene in Blender as per the `ZW-COMPOSE` instructions from Phase 9.0.
+
+### Example Snippets:
+
+**Part Definition with Metadata (e.g., in `zw_mcp/mesh/structural_parts.zw`):**
+```zw
+ZW-MESH:
+  NAME: Sturdy_Stone_Platform_01
+  TYPE: cube
+  PARAMS: { SIZE: 2.5 }
+  SCALE: "(2, 2, 0.3)"
+  MATERIAL: { NAME: BasicStone, BASE_COLOR: "#707070" }
+  METADATA:
+    TAGS: [platform, stone, sturdy, large, architectural_base]
+    SUITABILITY: [foundation_structure, base_element]
+  COLLECTION: Library_Structural
+///
+```
+
+**Template Definition (e.g., `zw_mcp/templates/altar_template.zw`):**
+```zw
+ZW-COMPOSE-TEMPLATE:
+  NAME: Sky_Altar_Template_v1
+  SLOTS:
+    - ID: BasePlatform
+      ROLE: foundation_structure
+      REQUIRED_TAGS: [platform, stone, sturdy]
+      LOCAL_TRANSFORM: { LOCATION: "(0,0,0)" }
+    - ID: FocalCrystal
+      ROLE: centerpiece_radiant
+      REQUIRED_TAGS: [crystal, radiant]
+      LOCAL_TRANSFORM: { LOCATION: "(0,0,1.0)", SCALE: "(0.5,0.5,0.5)" }
+  // ... other slots ...
+///
+```
+
+This system moves towards a more generative and AI-friendly approach, where ZW defines not just explicit scenes but also the rules, components, and templates for creating a multitude of scene variations. The `blender_adapter.py` does not need new ZW block *handlers* for this phase, as it already processes the `ZW-COMPOSE` output by the template engine. The primary new code is in `zw_mcp/handlers/template_engine.py`.
+
 [end of README.md]
