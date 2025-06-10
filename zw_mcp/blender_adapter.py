@@ -29,68 +29,46 @@ except ImportError:
             return {}
         # sys.exit(1) # Or exit if critical
 
-# Try to import handle_zw_mesh_block from zw_mesh (relative, package, or direct)
-ZW_MESH_IMPORTED = False
-HANDLE_ZW_MESH_BLOCK_FUNC = None
-try:
-    from .zw_mesh import handle_zw_mesh_block as imported_handle_zw_mesh_block
-    HANDLE_ZW_MESH_BLOCK_FUNC = imported_handle_zw_mesh_block
-    ZW_MESH_IMPORTED = True
-    print("Successfully imported handle_zw_mesh_block from .zw_mesh (relative).")
-except ImportError:
-    # Fallback if relative import fails
-    try:
-        from zw_mcp.zw_mesh import handle_zw_mesh_block as pkg_imported_handle_zw_mesh_block
-        HANDLE_ZW_MESH_BLOCK_FUNC = pkg_imported_handle_zw_mesh_block
-        ZW_MESH_IMPORTED = True
-        print("Successfully imported handle_zw_mesh_block from zw_mcp.zw_mesh (package).")
-    except ImportError as e_pkg_mesh:
-        print(f"Failed package import of handle_zw_mesh_block from zw_mcp.zw_mesh: {e_pkg_mesh}")
-        try:
-            from zw_mesh import handle_zw_mesh_block as direct_imported_handle_zw_mesh_block
-            HANDLE_ZW_MESH_BLOCK_FUNC = direct_imported_handle_zw_mesh_block
-            ZW_MESH_IMPORTED = True
-            print("Successfully imported handle_zw_mesh_block (direct from script directory - fallback).")
-        except ImportError as e_direct_mesh:
-            print(f"All import attempts for handle_zw_mesh_block failed: {e_direct_mesh}")
-            def HANDLE_ZW_MESH_BLOCK_FUNC(mesh_def_dict, collection_context=None): # Ensure dummy has same signature
-                print("[Critical Error] zw_mesh.handle_zw_mesh_block was not imported. Cannot process ZW-MESH.")
-                return None
-
-# --- Imports for zw_mesh utilities needed by ZW-COMPOSE ---
-APPLY_ZW_MESH_MATERIAL_FUNC = None
-EXPORT_ZW_MESH_TO_GLB_FUNC = None
+# ZW_MESH_IMPORTED and HANDLE_ZW_MESH_BLOCK_FUNC are removed as handle_zw_mesh_block will be local.
+# Imports for zw_mesh utilities needed by ZW-COMPOSE (specifically material override)
+APPLY_ZW_MATERIAL_FUNC = None # Renamed for clarity, was APPLY_ZW_MESH_MATERIAL_FUNC
 ZW_MESH_UTILS_IMPORTED = False
 try:
-    from .zw_mesh import apply_material as imported_apply_material, export_to_glb as imported_export_glb
-    APPLY_ZW_MESH_MATERIAL_FUNC = imported_apply_material
-    EXPORT_ZW_MESH_TO_GLB_FUNC = imported_export_glb
-    ZW_MESH_UTILS_IMPORTED = True
-    print("Successfully imported apply_material, export_to_glb from .zw_mesh (relative).")
+    from .zw_mesh import apply_material as imported_apply_material
+    APPLY_ZW_MATERIAL_FUNC = imported_apply_material
+    ZW_MESH_UTILS_IMPORTED = True # We only strictly need apply_material for ZW-COMPOSE material override
+    print("Successfully imported apply_material from .zw_mesh (relative).")
 except ImportError:
     try:
-        from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material, export_to_glb as pkg_imported_export_glb
-        APPLY_ZW_MESH_MATERIAL_FUNC = pkg_imported_apply_material
-        EXPORT_ZW_MESH_TO_GLB_FUNC = pkg_imported_export_glb
+        from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
+        APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
         ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported apply_material, export_to_glb from zw_mcp.zw_mesh (package).")
+        print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
     except ImportError as e_pkg_utils:
-        print(f"Failed package import of zw_mesh utils: {e_pkg_utils}")
+        print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
         try:
-            from zw_mesh import apply_material as direct_imported_apply_material, export_to_glb as direct_imported_export_glb
-            APPLY_ZW_MESH_MATERIAL_FUNC = direct_imported_apply_material
-            EXPORT_ZW_MESH_TO_GLB_FUNC = direct_imported_export_glb
+            from zw_mesh import apply_material as direct_imported_apply_material
+            APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
             ZW_MESH_UTILS_IMPORTED = True
-            print("Successfully imported zw_mesh utils (direct from script directory - fallback).")
+            print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
         except ImportError as e_direct_utils:
-            print(f"All import attempts for zw_mesh utils (apply_material, export_to_glb) failed: {e_direct_utils}")
-            # Define dummies if import failed
-            def APPLY_ZW_MESH_MATERIAL_FUNC(obj, material_def):
+            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
+            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
                 print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
-            def EXPORT_ZW_MESH_TO_GLB_FUNC(blender_obj, export_filepath_str):
-                print("[Critical Error] zw_mesh.export_to_glb was not imported. Cannot export in ZW-COMPOSE.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")
+
+# Ensure PROJECT_ROOT is defined for potential use in export paths or other utilities
+# This is a common pattern but might need adjustment based on how Blender scripts are run.
+try:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
+except NameError:
+    # Fallback if __file__ is not defined (e.g., running from Blender's text editor without saving the blend file)
+    # This might default to Blender's installation directory or user scripts path, which might not be ideal.
+    # A more robust solution for scripts run within Blender is to use bpy.data.filepath or preset paths.
+    PROJECT_ROOT = Path(bpy.data.filepath).parent if bpy.data.filepath else Path(".")
+    print(f"Warning: __file__ not defined, PROJECT_ROOT set to: {PROJECT_ROOT.resolve()}")
+
 
 def safe_eval(str_val, default_val):
     if not isinstance(str_val, str): return default_val
@@ -856,106 +834,346 @@ def handle_zw_light_block(light_data: dict, current_bpy_collection: bpy.types.Co
         print(f"    ✅ Successfully created light '{name}'.")
     except Exception as e: print(f"    [Error] Failed to create/configure light '{name}': {e}")
 
+# --- ZW-COMPOSE Handler (refined) ---
+def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
+    if not bpy:
+        print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
+        return
+
+    compose_name = compose_data.get("NAME", "ZWComposition")
+    print(f"[*] Processing ZW-COMPOSE assembly: {compose_name}")
+
+    bpy.ops.object.empty_add(type='PLAIN_AXES')
+    parent_empty = bpy.context.active_object
+    if not parent_empty:
+        print(f"    [Error] Failed to create parent Empty for {compose_name}. Aborting ZW-COMPOSE.")
+        return
+    parent_empty.name = compose_name
+
+    parent_empty.location = safe_eval(compose_data.get("LOCATION", "(0,0,0)"), (0,0,0))
+    rot_deg = safe_eval(compose_data.get("ROTATION", "(0,0,0)"), (0,0,0))
+    parent_empty.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+    scale_eval = safe_eval(compose_data.get("SCALE", "(1,1,1)"), (1,1,1))
+    parent_empty.scale = (scale_eval if isinstance(scale_eval, tuple) else (float(scale_eval), float(scale_eval), float(scale_eval)))
+    print(f"    Parent Empty '{parent_empty.name}' transform: L={parent_empty.location}, R={parent_empty.rotation_euler}, S={parent_empty.scale}")
+
+    comp_coll_name = compose_data.get("COLLECTION")
+    target_collection_for_empty = default_collection
+    if comp_coll_name:
+        target_collection_for_empty = get_or_create_collection(comp_coll_name, parent_collection=bpy.context.scene.collection)
+
+    # Link parent_empty to its target collection
+    current_collections = [coll for coll in parent_empty.users_collection]
+    for coll in current_collections: coll.objects.unlink(parent_empty)
+    if parent_empty.name not in target_collection_for_empty.objects:
+        target_collection_for_empty.objects.link(parent_empty)
+    print(f"    Parent Empty '{parent_empty.name}' linked to collection '{target_collection_for_empty.name}'")
+
+    # Store metadata on the parent empty
+    parent_empty["ZW_COMPOSE_NAME"] = compose_name
+    parent_empty["ZW_TEMPLATE_SOURCE"] = compose_data.get("TEMPLATE_SOURCE", "Direct ZW-COMPOSE") # If generated from template
+    parent_empty["ZW_ATTACHMENT_COUNT"] = len(compose_data.get("ATTACHMENTS", []))
+
+
+    base_model_name = compose_data.get("BASE_MODEL")
+    base_model_obj = None
+    if base_model_name:
+        original_base_obj = bpy.data.objects.get(base_model_name)
+        if original_base_obj:
+            bpy.ops.object.select_all(action='DESELECT')
+            original_base_obj.select_set(True)
+            bpy.context.view_layer.objects.active = original_base_obj
+            bpy.ops.object.duplicate(linked=False) # Duplicate object and data
+            base_model_obj = bpy.context.active_object
+            base_model_obj.name = f"{base_model_name}_base_of_{compose_name}"
+            target_collection_for_empty.objects.link(base_model_obj)
+            base_model_obj.parent = parent_empty
+            base_model_obj.location, base_model_obj.rotation_euler, base_model_obj.scale = (0,0,0), (0,0,0), (1,1,1)
+            base_model_obj["ZW_SLOT_ID"] = "BASE_MODEL"
+            base_model_obj["ZW_ROLE"] = compose_data.get("BASE_MODEL_ROLE", "base_model") # Example role
+            base_model_obj["ZW_SOURCE_OBJECT"] = base_model_name
+            print(f"    Added BASE_MODEL: '{base_model_name}' as '{base_model_obj.name}'")
+        else:
+            print(f"    [Warning] BASE_MODEL object '{base_model_name}' not found.")
+
+    attachments_list = compose_data.get("ATTACHMENTS", [])
+    for i, attach_def in enumerate(attachments_list):
+        if not isinstance(attach_def, dict): continue
+        attach_obj_source_name = attach_def.get("OBJECT")
+        original_attach_obj = bpy.data.objects.get(attach_obj_source_name)
+        if original_attach_obj:
+            bpy.ops.object.select_all(action='DESELECT')
+            original_attach_obj.select_set(True)
+            bpy.context.view_layer.objects.active = original_attach_obj
+            bpy.ops.object.duplicate(linked=False)
+            attached_obj = bpy.context.active_object
+            attached_obj.name = f"{attach_obj_source_name}_attach{i}_to_{compose_name}"
+            target_collection_for_empty.objects.link(attached_obj)
+            attached_obj.parent = parent_empty
+
+            attached_obj.location = safe_eval(attach_def.get("LOCATION", "(0,0,0)"), (0,0,0))
+            attach_rot_deg = safe_eval(attach_def.get("ROTATION", "(0,0,0)"), (0,0,0))
+            attached_obj.rotation_euler = Euler([math.radians(a) for a in attach_rot_deg], 'XYZ')
+            attach_scale_eval = safe_eval(attach_def.get("SCALE", "(1,1,1)"), (1,1,1))
+            attached_obj.scale = (attach_scale_eval if isinstance(attach_scale_eval, tuple) else (float(attach_scale_eval), float(attach_scale_eval), float(attach_scale_eval)))
+
+            # Custom Properties for attachments
+            attached_obj["ZW_SLOT_ID"] = attach_def.get("SLOT_ID", f"ATTACHMENT_{i}")
+            attached_obj["ZW_ROLE"] = attach_def.get("ROLE", "attachment")
+            attached_obj["ZW_SOURCE_OBJECT"] = attach_obj_source_name
+            print(f"      Added ATTACHMENT: '{attach_obj_source_name}' as '{attached_obj.name}'")
+
+            material_override_def = attach_def.get("MATERIAL_OVERRIDE")
+            if isinstance(material_override_def, dict):
+                if ZW_MESH_UTILS_IMPORTED and APPLY_ZW_MATERIAL_FUNC: # Use the aliased import
+                    print(f"        Applying MATERIAL_OVERRIDE to '{attached_obj.name}'")
+                    if 'NAME' not in material_override_def:
+                        material_override_def['NAME'] = f"{attached_obj.name}_OverrideMat"
+                    APPLY_ZW_MATERIAL_FUNC(attached_obj, material_override_def) # Call the imported function
+                else:
+                    print(f"        [Warning] MATERIAL_OVERRIDE for '{attached_obj.name}' but zw_mesh.apply_material not imported.")
+        else:
+            print(f"      [Warning] ATTACHMENT source object '{attach_obj_source_name}' not found.")
+
+    export_def = compose_data.get("EXPORT")
+    if export_def and isinstance(export_def, dict):
+        export_format = export_def.get("FORMAT", "").lower()
+        export_file_str = export_def.get("FILE")
+        if export_format == "glb" and export_file_str:
+            print(f"    Exporting composition '{compose_name}' to GLB: {export_file_str}")
+            export_path = Path(export_file_str)
+            if not export_path.is_absolute(): export_path = PROJECT_ROOT / export_path
+            export_path.parent.mkdir(parents=True, exist_ok=True)
+
+            bpy.ops.object.select_all(action='DESELECT')
+            parent_empty.select_set(True)
+            for child in parent_empty.children_recursive: child.select_set(True)
+            bpy.context.view_layer.objects.active = parent_empty
+            try:
+                bpy.ops.export_scene.gltf(filepath=str(export_path), export_format='GLB', use_selection=True, export_apply=True, export_materials='EXPORT', export_texcoords=True, export_normals=True, export_cameras=False, export_lights=False)
+                print(f"      Successfully exported to '{export_path.resolve()}'")
+            except RuntimeError as e_export:
+                print(f"      [Error] Failed to export GLB for '{compose_name}': {e_export}")
+        else:
+            print(f"    [Warning] EXPORT for '{compose_name}' missing format/file or not 'glb'.")
+    print(f"    ✅ Finished ZW-COMPOSE assembly: {compose_name}")
+
+# --- New ZW-METADATA Handler ---
+def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
+    if not bpy: return
+
+    target_name = target_obj_name or metadata_data.get("TARGET")
+    if not target_name:
+        print("  [Warning] ZW-METADATA: No TARGET specified and no target_obj_name passed. Skipping.")
+        return
+
+    target_obj = bpy.data.objects.get(target_name)
+    if not target_obj:
+        print(f"  [Warning] ZW-METADATA: Target object '{target_name}' not found. Skipping.")
+        return
+
+    print(f"  Processing ZW-METADATA for: {target_obj.name}")
+    for key, value in metadata_data.items():
+        if key == "TARGET": continue # Already used
+        try:
+            if isinstance(value, (list, dict)):
+                target_obj[f"ZW_{key.upper()}"] = json.dumps(value)
+            elif isinstance(value, (str, int, float, bool)):
+                 target_obj[f"ZW_{key.upper()}"] = value # Store simple types directly
+            else: # Attempt to convert to string if unknown type
+                target_obj[f"ZW_{key.upper()}"] = str(value)
+            print(f"    Set custom property ZW_{key.upper()} on {target_obj.name}")
+        except Exception as e:
+            print(f"    [Error] Failed to set custom property ZW_{key.upper()} on {target_obj.name}: {e}")
+
+# --- New ZW-COMPOSE-TEMPLATE Handler ---
+def handle_zw_compose_template_block(template_data: dict):
+    if not bpy: return
+    template_name = template_data.get("NAME", "UnnamedZWTemplate")
+    print(f"  Storing ZW-COMPOSE-TEMPLATE: {template_name}")
+
+    # Store as Blender Text block
+    text_block_name = f"ZW_Template_{template_name}"
+    text_block = bpy.data.texts.get(text_block_name)
+    if not text_block:
+        text_block = bpy.data.texts.new(name=text_block_name)
+
+    try:
+        template_json_string = json.dumps(template_data, indent=2)
+        text_block.from_string(template_json_string)
+        print(f"    Stored template '{template_name}' in Text block '{text_block_name}'.")
+
+        # Store as Scene custom property (for easier access by other scripts if needed, or as a flag)
+        scene_prop_name = f"ZW_TEMPLATE_{template_name.upper()}"
+        bpy.context.scene[scene_prop_name] = template_json_string # Storing full JSON string
+        print(f"    Stored template '{template_name}' in Scene custom property '{scene_prop_name}'.")
+    except Exception as e:
+        print(f"    [Error] Failed to store ZW-COMPOSE-TEMPLATE '{template_name}': {e}")
+
+# --- New Integrated ZW-MESH Handler ---
+def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Collection):
+    if not bpy: return None
+    mesh_name = mesh_data.get("NAME", "UnnamedZWMesh")
+    print(f"  Processing ZW-MESH (integrated): {mesh_name}")
+
+    base_type = mesh_data.get("TYPE", "cube").lower()
+    params = mesh_data.get("PARAMS", {})
+
+    # Create base primitive
+    if base_type == "cube":
+        bpy.ops.mesh.primitive_cube_add(size=float(params.get("SIZE", 1.0)))
+    elif base_type == "ico_sphere":
+        bpy.ops.mesh.primitive_ico_sphere_add(
+            subdivisions=int(params.get("SUBDIVISIONS", 2)),
+            radius=float(params.get("RADIUS", 1.0)) )
+    elif base_type == "cylinder":
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=int(params.get("VERTICES", 32)),
+            radius=float(params.get("RADIUS", 1.0)),
+            depth=float(params.get("DEPTH", 2.0)) )
+    elif base_type == "cone":
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=int(params.get("VERTICES", 32)),
+            radius1=float(params.get("RADIUS1", params.get("RADIUS", 1.0))),
+            depth=float(params.get("DEPTH", 2.0)) )
+    elif base_type == "plane":
+        bpy.ops.mesh.primitive_plane_add(size=float(params.get("SIZE", 2.0)))
+    else:
+        print(f"    [Warning] Unknown ZW-MESH base TYPE '{base_type}'. Defaulting to Cube.")
+        bpy.ops.mesh.primitive_cube_add(size=1.0)
+
+    mesh_obj = bpy.context.active_object
+    if not mesh_obj:
+        print(f"    [Error] Failed to create base primitive for ZW-MESH '{mesh_name}'.")
+        return None
+    mesh_obj.name = mesh_name
+
+    # Apply material properties
+    material_def = mesh_data.get("MATERIAL")
+    if isinstance(material_def, dict):
+        mat_name = material_def.get("NAME", f"{mesh_name}_Material")
+        mat = bpy.data.materials.get(mat_name)
+        if not mat: mat = bpy.data.materials.new(name=mat_name)
+        mesh_obj.data.materials.append(mat)
+        mat.use_nodes = True
+        bsdf = mat.node_tree.nodes.get("Principled BSDF")
+        if not bsdf:
+            bsdf = mat.node_tree.nodes.new(type='ShaderNodeBsdfPrincipled')
+            # Link to output if it's a new BSDF
+            output_node = mat.node_tree.nodes.get('Material Output')
+            if not output_node: output_node = mat.node_tree.nodes.new('ShaderNodeOutputMaterial')
+            mat.node_tree.links.new(bsdf.outputs['BSDF'], output_node.inputs['Surface'])
+
+        if "BASE_COLOR" in material_def: bsdf.inputs["Base Color"].default_value = parse_color(material_def["BASE_COLOR"])
+        if "EMISSION_STRENGTH" in material_def: bsdf.inputs["Emission Strength"].default_value = float(material_def["EMISSION_STRENGTH"]) # Legacy name
+        elif "EMISSION" in material_def: bsdf.inputs["Emission Strength"].default_value = float(material_def["EMISSION"])
+        if "EMISSION_COLOR" in material_def: bsdf.inputs["Emission Color"].default_value = parse_color(material_def["EMISSION_COLOR"])
+        if "ROUGHNESS" in material_def: bsdf.inputs["Roughness"].default_value = float(material_def["ROUGHNESS"])
+        if "METALLIC" in material_def: bsdf.inputs["Metallic"].default_value = float(material_def["METALLIC"])
+        if "TRANSMISSION" in material_def: bsdf.inputs["Transmission"].default_value = float(material_def["TRANSMISSION"])
+        if "ALPHA" in material_def: bsdf.inputs["Alpha"].default_value = float(material_def["ALPHA"])
+        if "SPECULAR" in material_def: bsdf.inputs["Specular IOR Level"].default_value = float(material_def["SPECULAR"]) # Assuming SPECULAR means IOR Level for Principled
+
+    # Apply Metadata (if any)
+    metadata_dict = mesh_data.get("METADATA")
+    if isinstance(metadata_dict, dict):
+        handle_zw_metadata_block(metadata_dict, target_obj_name=mesh_obj.name)
+
+    # Link to collection
+    explicit_coll_name = mesh_data.get("COLLECTION")
+    target_collection = current_bpy_collection
+    if explicit_coll_name:
+        target_collection = get_or_create_collection(explicit_coll_name, bpy.context.scene.collection)
+
+    current_obj_collections = [c for c in mesh_obj.users_collection]
+    for c in current_obj_collections: c.objects.unlink(mesh_obj) # Unlink from default
+    if mesh_obj.name not in target_collection.objects: target_collection.objects.link(mesh_obj)
+    print(f"    Linked '{mesh_obj.name}' to collection '{target_collection.name}'")
+
+    print(f"    ✅ Successfully created ZW-MESH (integrated): {mesh_name}")
+    return mesh_obj
+
+
 # --- Main Processing Logic ---
 def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_collection=None):
     if not bpy: return
     if current_bpy_collection is None: current_bpy_collection = bpy.context.scene.collection
     if not isinstance(data_dict, dict): return
+
     for key, value in data_dict.items():
-        created_bpy_object_for_current_zw_object = None
-        obj_attributes_for_current_zw_object = None
-        target_collection_for_this_object = current_bpy_collection
-        if key.upper().startswith("ZW-COLLECTION"):
+        # Convert key to uppercase for case-insensitive matching of top-level ZW blocks
+        zw_block_type = key.upper()
+
+        if zw_block_type.startswith("ZW-COLLECTION"): # Handles ZW-COLLECTION: Name format
             collection_name = key.split(":", 1)[1].strip() if ":" in key else key.replace("ZW-COLLECTION", "").strip()
             if not collection_name: collection_name = "Unnamed_ZW_Collection"
             print(f"[*] Processing ZW-COLLECTION block: '{collection_name}' under '{current_bpy_collection.name}'")
             block_bpy_collection = get_or_create_collection(collection_name, parent_collection=current_bpy_collection)
-            if isinstance(value, dict) and "CHILDREN" in value and isinstance(value["CHILDREN"], list):
-                for child_def_item in value["CHILDREN"]:
-                    if isinstance(child_def_item, dict):
-                        process_zw_structure(child_def_item, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
-            elif isinstance(value, dict) :
+            if isinstance(value, dict): # Process children within this new collection context
                 process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=block_bpy_collection)
             continue
-        elif key.upper() == "ZW-FUNCTION":
+
+        # Specific ZW block handlers
+        if zw_block_type == "ZW-OBJECT":
             if isinstance(value, dict):
-                print(f"[*] Processing ZW-FUNCTION block: {value.get('NAME', 'Unnamed Function')}")
-                handle_zw_function_block(value)
+                handle_zw_object_creation(value, parent_bpy_obj=parent_bpy_obj) # Assuming it handles its own collection logic based on its attributes
+            else: print(f"    [Warning] Value for 'ZW-OBJECT' key is not a dictionary. Value: {value}")
+            continue
+        elif zw_block_type == "ZW-MESH": # Uses the new integrated handler
+            if isinstance(value, dict):
+                handle_zw_mesh_block(value, current_bpy_collection)
+            else: print(f"    [Warning] Value for 'ZW-MESH' key is not a dictionary. Value: {value}")
+            continue
+        elif zw_block_type == "ZW-FUNCTION":
+            if isinstance(value, dict): handle_zw_function_block(value)
             else: print(f"[!] Warning: ZW-FUNCTION value is not a dictionary: {value}")
             continue
-        elif key.upper() == "ZW-DRIVER":
-            if isinstance(value, dict):
-                print(f"[*] Processing ZW-DRIVER block: {value.get('NAME', 'Unnamed Driver')}")
-                handle_zw_driver_block(value)
+        elif zw_block_type == "ZW-DRIVER":
+            if isinstance(value, dict): handle_zw_driver_block(value)
             else: print(f"[!] Warning: ZW-DRIVER value is not a dictionary: {value}")
             continue
-        elif key.upper() == "ZW-ANIMATION":
-            if isinstance(value, dict):
-                print(f"  Processing ZW-ANIMATION block: {value.get('NAME', 'UnnamedAnimation')}")
-                handle_zw_animation_block(value)
+        elif zw_block_type == "ZW-ANIMATION":
+            if isinstance(value, dict): handle_zw_animation_block(value)
             else: print(f"    [Warning] Value for 'ZW-ANIMATION' key is not a dictionary. Value: {value}")
             continue
-        elif key.upper() == "ZW-CAMERA":
-            if isinstance(value, dict):
-                print(f"  Processing ZW-CAMERA block for: {value.get('NAME', 'UnnamedCamera')}")
-                handle_zw_camera_block(value, current_bpy_collection)
+        elif zw_block_type == "ZW-CAMERA":
+            if isinstance(value, dict): handle_zw_camera_block(value, current_bpy_collection)
             else: print(f"    [Warning] Value for 'ZW-CAMERA' key is not a dictionary. Value: {value}")
             continue
-        elif key.upper() == "ZW-LIGHT":
-            if isinstance(value, dict):
-                print(f"  Processing ZW-LIGHT block for: {value.get('NAME', 'UnnamedLight')}")
-                handle_zw_light_block(value, current_bpy_collection)
+        elif zw_block_type == "ZW-LIGHT":
+            if isinstance(value, dict): handle_zw_light_block(value, current_bpy_collection)
             else: print(f"    [Warning] Value for 'ZW-LIGHT' key is not a dictionary. Value: {value}")
             continue
-        elif key.upper() == "ZW-STAGE":
-            if isinstance(value, dict):
-                print(f"  Processing ZW-STAGE block: {value.get('NAME', 'UnnamedStage')}")
-                handle_zw_stage_block(value)
+        elif zw_block_type == "ZW-STAGE":
+            if isinstance(value, dict): handle_zw_stage_block(value) # Assumes stage handles its own object targeting
             else: print(f"    [Warning] Value for 'ZW-STAGE' key is not a dictionary. Value: {value}")
             continue
-        elif key == "ZW-MESH": # Assuming ZW-MESH is a key, and its value is the definition dictionary
-            if isinstance(value, dict):
-                if ZW_MESH_IMPORTED and HANDLE_ZW_MESH_BLOCK_FUNC:
-                    print(f"  Processing ZW-MESH block: {value.get('NAME', 'UnnamedZWMesh')}")
-                    # Pass the current_bpy_collection so zw_mesh.py can link the new object correctly
-                    HANDLE_ZW_MESH_BLOCK_FUNC(value, current_bpy_collection)
-                else:
-                    print("    [Error] ZW-MESH block found, but zw_mesh.handle_zw_mesh_block function was not imported.")
-            else:
-                print(f"    [Warning] Value for 'ZW-MESH' key is not a dictionary. Value: {value}")
-            continue # Added continue to ensure it doesn't fall through to ZW-OBJECT or generic dict processing
-        if key.upper() == "ZW-OBJECT":
-            if isinstance(value, dict): obj_attributes_for_current_zw_object = value
-            elif isinstance(value, str): obj_attributes_for_current_zw_object = {"TYPE": value}
-        elif key.lower() in ["sphere", "cube", "plane", "cone", "cylinder", "torus"] and isinstance(value, dict):
-            obj_attributes_for_current_zw_object = value.copy()
-            obj_attributes_for_current_zw_object["TYPE"] = key
-        if obj_attributes_for_current_zw_object:
-            created_bpy_object_for_current_zw_object = handle_zw_object_creation(obj_attributes_for_current_zw_object, parent_bpy_obj)
-            if created_bpy_object_for_current_zw_object:
-                explicit_collection_name = obj_attributes_for_current_zw_object.get("COLLECTION")
-                if explicit_collection_name:
-                    target_collection_for_this_object = get_or_create_collection(explicit_collection_name, parent_collection=bpy.context.scene.collection)
-                if target_collection_for_this_object:
-                    for coll in created_bpy_object_for_current_zw_object.users_collection:
-                        coll.objects.unlink(created_bpy_object_for_current_zw_object)
-                    target_collection_for_this_object.objects.link(created_bpy_object_for_current_zw_object)
-                    print(f"    Linked '{created_bpy_object_for_current_zw_object.name}' to collection '{target_collection_for_this_object.name}'")
-                children_list = obj_attributes_for_current_zw_object.get("CHILDREN")
-                if children_list and isinstance(children_list, list):
-                    print(f"[*] Processing CHILDREN for '{created_bpy_object_for_current_zw_object.name}' in collection '{target_collection_for_this_object.name}'")
-                    for child_item_definition in children_list:
-                        if isinstance(child_item_definition, dict):
-                            process_zw_structure(child_item_definition,
-                                                 parent_bpy_obj=created_bpy_object_for_current_zw_object,
-                                                 current_bpy_collection=target_collection_for_this_object)
-                        else: print(f"    [!] Warning: Item in CHILDREN list is not a dictionary: {child_item_definition}")
-                elif children_list is not None: print(f"    [!] Warning: CHILDREN attribute for an object is not a list: {type(children_list)}")
+        elif zw_block_type == "ZW-METADATA": # Standalone metadata block
+            if isinstance(value, dict): handle_zw_metadata_block(value) # Target is inside 'value'
+            else: print(f"    [Warning] Value for 'ZW-METADATA' key is not a dictionary. Value: {value}")
             continue
+        elif zw_block_type == "ZW-COMPOSE-TEMPLATE":
+            if isinstance(value, dict): handle_zw_compose_template_block(value)
+            else: print(f"    [Warning] Value for 'ZW-COMPOSE-TEMPLATE' key is not a dictionary. Value: {value}")
+            continue
+        elif zw_block_type == "ZW-COMPOSE":
+            if isinstance(value, dict): handle_zw_compose_block(value, current_bpy_collection)
+            else: print(f"    [Warning] Value for 'ZW-COMPOSE' key is not a dictionary. Value: {value}")
+            continue
+
+        # Fallback for generic dictionary (potential nested ZW structures or object attributes if key is not a ZW block type)
+        # This part needs to be careful not to re-process ZW-OBJECT attributes if key was like "Cube"
+        # The current structure with `obj_attributes_for_current_zw_object` handles ZW-OBJECT definitions correctly.
+        # This is more for generic, non-ZW-block-keyworded dictionaries.
         elif isinstance(value, dict):
-            if key.upper() == "ZW-NESTED-DETAILS":
-                print(f"[*] Processing ZW-NESTED-DETAILS (semantic parent link: {value.get('PARENT')}). Using collection '{current_bpy_collection.name}'")
+            # If the key itself is not a recognized ZW block type, but the value is a dictionary,
+            # it might be a nested structure or a definition where key is the name (e.g. "MyCube: TYPE: Cube...")
+            # This recursive call should use the current_bpy_collection.
+            # print(f"[*] Recursively processing generic dict key: '{key}' in collection '{current_bpy_collection.name}'")
             process_zw_structure(value, parent_bpy_obj=parent_bpy_obj, current_bpy_collection=current_bpy_collection)
+        # else:
+            # print(f"  Skipping non-dictionary, non-ZW-block value for key '{key}'")
+
 
 def run_blender_adapter():
     print("--- Starting ZW Blender Adapter ---")

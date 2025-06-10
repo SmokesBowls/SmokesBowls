@@ -142,27 +142,33 @@ NOTE: This scene now includes ZW-STAGE tracks for PROPERTY_ANIM, MATERIAL_OVERRI
 ///
 
 // --- Test Case for ZW-MESH (Phase 8.5) ---
+// Enhanced for Material Detail Test (Phase 9.1 Part 2)
 ZW-MESH:
-  NAME: Spirit_Tree_Test
-  TYPE: ico_sphere // This should be interpreted as the base primitive by zw_mesh.create_base_mesh
+  NAME: Spirit_Tree_Test // This might already exist, ensure its MATERIAL block is detailed
+  TYPE: ico_sphere
   PARAMS:
     SUBDIVISIONS: 3
     RADIUS: 1.5
   DEFORMATIONS:
     - TYPE: twist
       AXIS: Z
-      ANGLE: 60 // Assumed to be degrees, zw_mesh.py's apply_deformations handles math.radians()
+      ANGLE: 60
     - TYPE: displace
-      TEXTURE: noise // zw_mesh.py's add_displace_deform handles this, might map to 'CLOUDS' or similar
+      TEXTURE: noise
       STRENGTH: 0.4
   MATERIAL:
-    NAME: SpiritGlowMaterial // Explicit material name
-    BASE_COLOR: "#7FFFD4"    // Aquamarine
-    EMISSION: 1.2            // Emission strength
-    EMISSION_COLOR: "#9FFFFF" // Pale cyan/turquoise for emission
+    NAME: SpiritGlowEnhancedMat // Potentially new material name
+    BASE_COLOR: "#7FFFD4"
+    EMISSION: 1.5
+    EMISSION_COLOR: "#9FFFFF"
+    ROUGHNESS: 0.1             // Test this
+    METALLIC: 0.2              // Test this
+    ALPHA: 0.9                 // Test this (for transparency)
+    SPECULAR: 0.7             // Test this
   LOCATION: (0.0, 0.0, 0.0)
-  ROTATION: "(0.0, 0.0, 0.0)" // Using string tuple for consistency with how adapter might handle it
-  SCALE: "(1.0, 1.0, 1.0)"  // Using string tuple
+  ROTATION: "(0.0, 0.0, 0.0)"
+  SCALE: "(1.0, 1.0, 1.0)"
+  COLLECTION: ProceduralObjects // Ensure it has a collection
 ///
 
 // --- Test Case for ZW-MESH with Texture and Export (Phase 8.6) ---
@@ -273,4 +279,40 @@ ZW-COMPOSE:
   EXPORT: // Optional export for the assembled object
     FORMAT: glb
     FILE: "exports/crystal_shrine_assembly.glb"
+///
+
+// --- Test Case for Standalone ZW-METADATA (Phase 9.1 Part 2) ---
+ZW-OBJECT: // Ensure this object exists for ZW-METADATA to target
+  NAME: MetadataTargetObject
+  TYPE: Cube
+  LOCATION: "(-15, 0, 1)"
+  COLLECTION: TestCollection
+///
+
+ZW-METADATA:
+  TARGET: MetadataTargetObject // Name of an object defined in this ZW file
+  TAGS: [interactive, key_item, ancient_relic]
+  SUITABILITY: [quest_objective, puzzle_element]
+  CUSTOM_PROPERTY: "Can be activated"
+  UNLOCKS_FEATURE: "Phase_9_2_PowerUp"
+  NUMERIC_VALUE: 100
+///
+
+// --- Test Case for ZW-COMPOSE-TEMPLATE Storage (Phase 9.1 Part 2) ---
+ZW-COMPOSE-TEMPLATE:
+  NAME: SimplePedestalTemplate
+  DESCRIPTION: "A template for a simple pedestal with an item on top."
+  STYLE:
+    THEME: stone_ruins
+  SLOTS:
+    - ID: PEDESTAL_BASE
+      ROLE: base
+      REQUIRED_TAGS: [pedestal, stone]
+      LOCAL_TRANSFORM:
+        LOCATION: "(0,0,0)"
+    - ID: TOP_ITEM
+      ROLE: display_item
+      REQUIRED_TAGS: [artifact, small]
+      LOCAL_TRANSFORM:
+        LOCATION: "(0,0,0.5)" // Relative to PEDESTAL_BASE top (assuming base is 1 unit high)
 ///
