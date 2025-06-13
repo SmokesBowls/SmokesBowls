@@ -1,0 +1,41 @@
+ZW-INTENT:
+  SOURCE: "ManualTest_OrbitalTestFile"
+  TARGET_SYSTEM: "blender"
+  // TARGET_FUNCTION: "process_zw_payload" // Could be a future field for more specific routing
+  ROUTE_FILE: "inline" // Indicates the payload is in this file after '---'
+  INTENT_TYPE: "ExecuteVisualSceneDescription"
+  PRIORITY: 1
+  CONTEXT:
+    AUTHOR: "TestHarness"
+    NOTES: "A simple test to verify ZWX parsing and routing to Blender via engain_orbit.py. Payload creates a cube."
+///
+---
+// ZW Payload for Blender starts here
+
+ZW-OBJECT:
+  NAME: OrbitalTestCube
+  TYPE: Cube
+  LOCATION: "(0, 0, 1)"
+  SCALE: "(0.5, 0.5, 0.5)"
+  MATERIAL:
+    NAME: OrbitalTestMat
+    BASE_COLOR: "#FF8C00" // DarkOrange
+  COLLECTION: OrbitalTests
+///
+
+ZW-STAGE:
+  NAME: "OrbitalTestStage"
+  TRACKS:
+    - TYPE: VISIBILITY
+      TARGET: "OrbitalTestCube"
+      START: 1
+      STATE: "SHOW"
+    - TYPE: VISIBILITY
+      TARGET: "OrbitalTestCube"
+      START: 50
+      STATE: "HIDE"
+    - TYPE: VISIBILITY
+      TARGET: "OrbitalTestCube"
+      START: 100
+      STATE: "SHOW"
+///
