@@ -75,7 +75,14 @@ def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Ad
     blender_adapter_path = str(PROJECT_ROOT / "zw_mcp" / "blender_adapter.py")
 
     try:
-        subprocess.run([BLENDER_EXECUTABLE_PATH, "--python", blender_adapter_path, "--", temp_path], check=True)
+    subprocess.run([
+        BLENDER_EXECUTABLE_PATH,
+        "--background",
+        "--python", blender_adapter_path,
+        "--",
+        "--input", temp_path
+    ], check=True)
+
         log_orbit_event(f"✔ Routed: {source_file_name} → Blender")
     except subprocess.CalledProcessError as e:
         print(f"[ERROR] Blender execution failed: {e}")
