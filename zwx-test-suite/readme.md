@@ -1,4 +1,4 @@
-# ZWX Test Suite
+
 
 This directory contains `.zwx` files for testing the intent-routing pipeline,
 including validation, execution via `engain_orbit.py`, and monitoring via `orbit_watchdog.py`.
