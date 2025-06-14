@@ -1,4 +1,4 @@
-# ZWX Test Suite
+
 
 This directory contains `.zwx` files for testing the intent-routing pipeline,
 including validation, execution via `engain_orbit.py`, and monitoring via `orbit_watchdog.py`.
@@ -35,3 +35,20 @@ Or test the `orbit_watchdog.py` by copying files into its watch folder:
 # Ensure orbit_watchdog.py is running
 cp zwx-test-suite/basic/valid_inline_payload.zwx zw_drop_folder/validated_patterns/
 ```
+
+This folder contains structured `.zwx` files used for testing `engain_orbit.py` and validating the intent routing system.
+
+## Test Naming Convention
+
+- Files starting with `valid_` are expected to be successfully processed.
+- Files starting with `invalid_` are expected to fail validation or execution.
+- Files are grouped by subfolder topic (e.g., `godot/`, `payload_variants/`, etc.).
+
+## Test Runner
+
+Run the test suite from the root:
+
+```bash
+python tools/test_orbit_routing.py
+
+
