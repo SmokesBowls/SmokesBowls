@@ -1,3 +1,8 @@
+---
+> 🚦 **Phase 9.2.1 — Intent Routing Operational**
+> This version establishes the `.zwx` intent-driven architecture with `engain_orbit.py` as the central router,
+> including schema validation, execution logging, and foundational multi-engine support.
+---
 # ZW MCP Ecosystem: AI-Powered Creative Orchestration
 
 ![ZW MCP System Diagram](https://via.placeholder.com/800x400?text=ZW+MCP+System+Architecture)
@@ -12,6 +17,11 @@ ZW MCP is an advanced ecosystem that bridges AI-powered language models with cre
 - 🤖 **Multi-agent collaboration** for complex tasks
 - 🔄 **Roundtrip workflows** between text and 3D environments
 - ⚡ **Real-time networked communication** between components
+
+A key component in this ecosystem is **EngAIn-Orbit (`tools/engain_orbit.py`)**, which processes `.zwx` files.
+The `.zwx` format separates `ZW-INTENT` (the semantic directive, e.g., target system and function)
+from `ZW-PAYLOAD` (the actual ZW data for the creative task). This allows for clear,
+AI-dispatchable instructions and modular routing to different backend engines.
 
 ```python
 # Example ZW Protocol Snippet
@@ -37,6 +47,8 @@ ZW-NARRATIVE:
 | **ZW Parser** | Protocol validation/translation | Python, Regex |
 | **Autonomous Agents** | AI-powered task execution | State machines, Memory |
 | **Blender Adapter** | 3D content generation | bpy, Geometry Nodes |
+| **EngAIn-Orbit Router** | Processes `.zwx` files, routes ZW-PAYLOAD based on ZW-INTENT | Python, `.zwx` |
+| **ZW-INTENT Validator** | Validates `ZW-INTENT` blocks in `.zwx` files for structural integrity | Python (in `tools/intent_utils.py`) |
 
 ### Advanced Capabilities
 - **Multi-Agent Orchestration**
@@ -90,6 +102,8 @@ python zw_mcp/client_example.py prompts/example.zw
 ```bash
 blender --background --python zw_mcp/blender_adapter.py
 ```
+(See `tools/engain_orbit.py` for the new primary way to execute ZW content via `.zwx` files)
+
 
 ## System Architecture
 
@@ -109,6 +123,9 @@ zw_mcp/
 │   ├── prompts/          # ZW input files
 │   └── schemas/          # Protocol definitions
 └── tools/                # Utilities
+    ├── engain_orbit.py   # ZWX intent router
+    ├── orbit_watchdog.py # Automated ZWX file processor
+    ├── intent_utils.py   # ZW-INTENT validator
     ├── exporter.py       # Blender→ZW conversion
     └── watcher.py        # Directory monitoring
 ```
@@ -172,6 +189,77 @@ ZW-ANIMATION:
       VALUE: (0, 0, 360)
 ```
 
+## ✅ Current Project Status & Milestone
+
+**Milestone: Phase 9.2.2 – Automated ZWX Routing + Testing Framework**
+
+This milestone completes the foundational tools for ZWX intent routing and validation.
+
+**Highlights:**
+- `.zwx` format with `ZW-INTENT` and `ZW-PAYLOAD` blocks is now fully supported.
+- `engain_orbit.py` handles intent parsing and dispatch.
+- `orbit_watchdog.py` automates detection + execution of `.zwx` files.
+- `test_orbit_routing.py` runs automated integration tests across valid/invalid ZWX cases.
+- All test output is logged in `zw_mcp/logs/orbit_test_results.log`.
+
+**Status Tag:** ✅ Stable / Actively Maintained
+**Focus:** Integration testing, routing logic, reliability under automation
+
+## Tools and Utilities
+
+### `tools/engain_orbit.py`: ZWX Execution Router
+The `engain_orbit.py` script (located in the `tools/` directory) is the primary entry point for executing `.zwx` files.
+Key aspects of this system include:
+- **`.zwx` File Format**: Combines a `ZW-INTENT` block (metadata for routing and execution) with a `ZW-PAYLOAD` block (the ZW commands).
+  ```
+  ZW-INTENT:
+    TARGET_SYSTEM: blender
+    TARGET_FUNCTION: create_scene
+    DESCRIPTION: A simple cube
+  ---
+  ZW-PAYLOAD:
+    OBJECT: MyCube
+      TYPE: Cube
+      SIZE: 2
+  ```
+- **Schema Validation**: The `ZW-INTENT` block is automatically validated by `tools/intent_utils.py` to ensure required fields like `TARGET_SYSTEM` are present, aiding in early error detection and debugging of `.zwx` files.
+- **Execution Logging**: All routing attempts, successes, and failures (including validation errors) by `engain_orbit.py` are logged with timestamps to `zw_mcp/logs/orbit_exec.log`. This provides a detailed audit trail for diagnostics. Example:
+  ```log
+  [2023-10-27 10:00:00] ✔ Routed: examples/my_scene.zwx → blender
+  [2023-10-27 10:00:05] ❌ Validation FAILED: examples/bad_scene.zwx - Missing TARGET_SYSTEM in ZW-INTENT block.
+  ```
+
+### `tools/orbit_watchdog.py`: Automated ZWX File Processor
+
+The `orbit_watchdog.py` script provides an automated way to process `.zwx` files.
+It monitors a specified directory for new `.zwx` files, and upon detection,
+it uses `engain_orbit.py` to validate and route them.
+
+**Key Features:**
+- **Automated Processing**: Continuously watches a folder for new files.
+- **Uses EngAIn-Orbit**: Leverages `engain_orbit.py` for the core processing logic (validation, routing).
+- **File Management**: Moves processed files to designated subfolders (`executed/` for successes, `failed/` for failures).
+- **Logging**: Records its activities, including files processed and outcomes, to `zw_mcp/logs/orbit_watchdog.log`.
+- **Single Run Mode**: Supports a `--once` flag to scan the folder once and then exit.
+
+**Directory Structure:**
+The watchdog expects the following directory structure (relative to the project root):
+- `zw_drop_folder/validated_patterns/`: The directory monitored for new `.zwx` files.
+- `zw_drop_folder/executed/`: Successfully processed files are moved here.
+- `zw_drop_folder/failed/`: Files that failed processing are moved here.
+
+Ensure these directories are created before running the watchdog, or the script will attempt to create them.
+
+**Usage:**
+To run the watchdog continuously:
+```bash
+python3 tools/orbit_watchdog.py
+```
+To scan the folder once and exit:
+```bash
+python3 tools/orbit_watchdog.py --once
+```
+
 ## Development Roadmap
 
 ### Current Features
@@ -180,13 +268,54 @@ ZW-ANIMATION:
 - [x] Ollama API integration
 - [x] Blender scene generation
 - [x] Multi-agent orchestration
+- [x] EngAIn-Orbit `.zwx` router (`tools/engain_orbit.py`)
+- [x] ZW-INTENT schema validation (`tools/intent_utils.py`)
+- [x] Execution logging for EngAIn-Orbit (`zw_mcp/logs/orbit_exec.log`)
+- [x] Automated ZWX file processing (`tools/orbit_watchdog.py`)
 
 ### Planned Features
-- [ ] Godot engine integration
+- [ ] Godot engine integration (Stubbed in `engain_orbit.py` for basic routing)
 - [ ] Web-based control interface
 - [ ] Versioned memory system
 - [ ] Physics simulation support
 - [ ] Audio-reactive animations
+
+
+## Testing and Validation
+
+This project includes a test suite to verify the functionality of the ZWX intent-routing pipeline.
+
+### Automated Test Suite
+
+The primary test runner is `tools/test_orbit_routing.py`. It automatically discovers and executes `.zwx` test files located in the `zwx-test-suite/` directory.
+
+**Running the Suite:**
+To execute all tests:
+```bash
+python3 tools/test_orbit_routing.py
+```
+The script will print a summary of test results to the console, indicating total tests, expected passes/fails, and actual passes/fails.
+
+**Interpreting Results:**
+- Test files in `zwx-test-suite/` prefixed with `invalid_` (e.g., `invalid_missing_target.zwx`) are expected to cause an error during processing by `engain_orbit.py` (i.e., `engain_orbit.py` should exit with a non-zero status code). The test runner counts this as a **test pass** if the error occurs as expected.
+- All other test files are expected to be processed successfully by `engain_orbit.py` (i.e., exit with a zero status code).
+
+**Test Logs:**
+Detailed logs for each test run, including the command output and specific errors for failed tests, are written to:
+`zw_mcp/logs/orbit_test_results.log`
+
+### Manual Testing with Watchdog
+
+You can also perform manual or simulation testing using the `orbit_watchdog.py` tool:
+1. Ensure `tools/orbit_watchdog.py` is running (either continuously or with the `--once` flag).
+   ```bash
+   python3 tools/orbit_watchdog.py
+   ```
+2. Copy or create `.zwx` files in the `zw_drop_folder/validated_patterns/` directory.
+3. The watchdog will automatically pick up these files, process them via `engain_orbit.py`, and move them to `zw_drop_folder/executed/` or `zw_drop_folder/failed/`.
+4. Review `zw_mcp/logs/orbit_watchdog.log` for processing details and `zw_mcp/logs/orbit_exec.log` for `engain_orbit.py` execution details.
+
+This approach helps simulate production ingestion and validate the end-to-end automated workflow.
 
 ## Contributing
 
@@ -228,3 +357,4 @@ AGENT_CONFIG = {
 ```
 
 **Ready to create?** Start with our [Quickstart Guide](docs/QUICKSTART.md) or explore the [Example Gallery](examples/).
+Use `tools/engain_orbit.py` to run `.zwx` examples.

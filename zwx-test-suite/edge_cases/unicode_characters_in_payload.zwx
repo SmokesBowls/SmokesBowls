@@ -1,0 +1,6 @@
+ZW-INTENT:
+  TARGET_SYSTEM: Blender
+  DESCRIPTION: Unicode character test
+---
+ENTITY: 神龙
+ACTION: 飞翔
