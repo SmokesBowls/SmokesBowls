@@ -74,7 +74,7 @@ def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Ad
 
     blender_adapter_path = str(PROJECT_ROOT / "zw_mcp" / "blender_adapter.py")
 
-    try:
+try:
     subprocess.run([
         BLENDER_EXECUTABLE_PATH,
         "--background",
