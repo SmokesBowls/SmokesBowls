@@ -1,0 +1,1 @@
+ZW-INTENT:\n  TARGET_SYSTEM: Blender\n  ROUTE_FILE: scenes/sample.zw\n---\nZW-PAYLOAD:\n  ENTITY: Cube\n  ACTION: Rotate
