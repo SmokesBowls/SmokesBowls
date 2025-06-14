@@ -1,0 +1,5 @@
+ZW-INTENT:
+  DESCRIPTION: Missing TARGET_SYSTEM field
+---
+ENTITY: Ghost
+ACTION: Fade
