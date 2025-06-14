@@ -1,0 +1,60 @@
+// Structural Parts with Metadata for ZWTemplateEngine
+
+ZW-MESH:
+  NAME: Large_Stone_Platform_A
+  TYPE: cube // Base primitive
+  PARAMS:
+    SIZE: 3.0 // Represents a large base
+  LOCATION: "(0,0,-0.25)" // Sits low
+  SCALE: "(2.0, 2.0, 0.5)"
+  MATERIAL:
+    NAME: RoughStoneMat
+    BASE_COLOR: "#6E6E6E" // Gray stone
+    BSDF:
+      ROUGHNESS: 0.8
+  METADATA:
+    TAGS: [platform, stone, sturdy, large, ancient]
+    SUITABILITY: [foundation_structure, base]
+    DESCRIPTION: "A wide, sturdy stone platform suitable as a large base."
+  COLLECTION: ModularParts_Structural
+///
+
+ZW-MESH:
+  NAME: Simple_Pillar_Stone_A
+  TYPE: cylinder
+  PARAMS:
+    VERTICES: 12
+    RADIUS: 0.2
+    DEPTH: 2.0 // Height of the pillar
+  MATERIAL:
+    NAME: PillarStoneMat
+    BASE_COLOR: "#777777"
+  METADATA:
+    TAGS: [pillar, stone, sturdy, support]
+    SUITABILITY: [support_column, structural_element]
+    DESCRIPTION: "A simple cylindrical stone pillar."
+  COLLECTION: ModularParts_Structural
+///
+
+ZW-MESH:
+  NAME: Ornate_Pillar_Fluted
+  TYPE: cylinder
+  PARAMS:
+    VERTICES: 32 // More vertices for a smoother, possibly fluted look (if detailed)
+    RADIUS: 0.25
+    DEPTH: 2.2
+  DEFORMATIONS: // Example placeholder for more detail
+    - TYPE: twist
+      ANGLE: 5 // Slight twist
+      AXIS: Z
+  MATERIAL:
+    NAME: PolishedStonePillarMat
+    BASE_COLOR: "#8A8A8A"
+    BSDF:
+      ROUGHNESS: 0.3
+  METADATA:
+    TAGS: [pillar, stone, sturdy, support, ornate]
+    SUITABILITY: [support_column, decorative_support]
+    DESCRIPTION: "An ornate, fluted stone pillar."
+  COLLECTION: ModularParts_Structural
+///
