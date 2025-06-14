@@ -75,6 +75,7 @@ def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Ad
     blender_adapter_path = str(PROJECT_ROOT / "zw_mcp" / "blender_adapter.py")
 
     try:
+
         subprocess.run([
             BLENDER_EXECUTABLE_PATH,
             "--background",
@@ -187,6 +188,7 @@ if __name__ == "__main__":
     execute_orbit(args.zwx_file)
 
 # ---- End of modified code for tools/engain_orbit.py ----
+
 
 # Add zw_mcp to sys.path to allow direct import of zw_parser
 # This assumes engain_orbit.py is in the root and zw_mcp is a subdirectory
@@ -431,6 +433,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
