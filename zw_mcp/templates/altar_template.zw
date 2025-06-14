@@ -1,0 +1,69 @@
+// Template for a Sky Altar assembly
+// Used by ZWTemplateEngine to generate a ZW-COMPOSE block.
+
+ZW-COMPOSE-TEMPLATE:
+  NAME: Sky_Altar_Template_v1 // Added version for clarity
+  // Optional: Define default overall collection for composed object
+  // COLLECTION: Altars
+
+  SLOTS: // List of parts this template requires
+    - ID: BasePlatform
+      ROLE: foundation_structure // Semantic role of this part
+      REQUIRED_TAGS: [platform, stone, sturdy, large] // AI will look for ZW-MESH/OBJECT with these tags
+      OPTIONAL_TAGS: [ancient, weathered]
+      COUNT: 1 // How many of these to place (default 1)
+      LOCAL_TRANSFORM: // Transform relative to the ZW-COMPOSE parent empty
+        LOCATION: "(0, 0, 0)"
+        ROTATION: "(0, 0, 0)" // Degrees
+        SCALE: "(1.0, 1.0, 1.0)"
+
+    - ID: FocalCrystal
+      ROLE: centerpiece_radiant
+      REQUIRED_TAGS: [crystal, radiant, magical]
+      OPTIONAL_TAGS: [blue, large_crystal]
+      COUNT: 1
+      LOCAL_TRANSFORM:
+        LOCATION: "(0, 0, 1.0)" // Positioned above the base
+        SCALE: "(0.5, 0.5, 0.5)"
+      // MATERIAL_OVERRIDE: // Example of how a slot could force a material
+      //   NAME: ForcedCrystalMat
+      //   BASE_COLOR: "#DDFFFF"
+
+    - ID: LeftSupportPillar
+      ROLE: support_column
+      REQUIRED_TAGS: [pillar, stone, sturdy]
+      COUNT: 1
+      LOCAL_TRANSFORM:
+        LOCATION: "(-1.5, 0, -0.25)" // Assuming base is 0.5 high, so this is at its bottom edge
+        ROTATION: "(0,0,0)"
+        SCALE: "(0.3, 0.3, 1.0)" // Tall, thin pillar
+
+    - ID: RightSupportPillar
+      ROLE: support_column
+      REQUIRED_TAGS: [pillar, stone, sturdy]
+      COUNT: 1
+      LOCAL_TRANSFORM:
+        LOCATION: "(1.5, 0, -0.25)"
+        ROTATION: "(0,0,0)"
+        SCALE: "(0.3, 0.3, 1.0)"
+
+    - ID: DecorativeShards_Left
+      ROLE: aesthetic_detail_crystal
+      REQUIRED_TAGS: [crystal, small, sharp]
+      OPTIONAL_TAGS: [blue, clusterable]
+      COUNT: 3 // Example: place 3 small shards
+      PLACEMENT_STRATEGY: random_cluster // Hint for advanced placement (not used by current engine)
+      LOCAL_TRANSFORM: // Base transform for the cluster or first item
+        LOCATION: "(-1.0, -1.0, 0.5)"
+      // VARIATIONS: // Future: Allow variations in scale/rotation for COUNT > 1
+      //   SCALE_MIN: "(0.1,0.1,0.1)"
+      //   SCALE_MAX: "(0.3,0.3,0.3)"
+
+  // CONSTRAINTS: // Future: Define relationships between slots
+  //   - TYPE: ALIGN_TOP
+  //     SOURCE_SLOT: FocalCrystal
+  //     TARGET_SLOT: BasePlatform
+  // STYLE_HINTS: // Future: Global style hints for the AI when filling slots
+  //   PRIMARY_COLOR_PALETTE: ["#504030", "#C0B0A0", "#3080A0"]
+  //   SECONDARY_ACCENT: "#A0E0FF"
+///

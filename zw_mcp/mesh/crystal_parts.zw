@@ -1,0 +1,67 @@
+// Crystal and Decorative Parts with Metadata for ZWTemplateEngine
+
+ZW-MESH:
+  NAME: Radiant_Blue_Crystal_Large
+  TYPE: ico_sphere
+  PARAMS:
+    SUBDIVISIONS: 3
+    RADIUS: 0.6
+  MATERIAL:
+    NAME: BlueCrystalGlowMat
+    BASE_COLOR: "#33AAFF"
+    EMISSION: 2.5
+    EMISSION_COLOR: "#88CCFF"
+    BSDF:
+      ROUGHNESS: 0.1
+      // TRANSMISSION: 0.5 // Future: for glassy look
+  METADATA:
+    TAGS: [crystal, radiant, magical, blue, large_crystal, focal_item]
+    SUITABILITY: [centerpiece_radiant, focal]
+    DESCRIPTION: "A large, glowing blue crystal, suitable as a centerpiece."
+  COLLECTION: ModularParts_Crystals
+///
+
+ZW-MESH:
+  NAME: Small_Energy_Shard_Red
+  TYPE: cone
+  PARAMS:
+    VERTICES: 6
+    RADIUS1: 0.05
+    RADIUS2: 0.01
+    DEPTH: 0.4
+  MATERIAL:
+    NAME: RedShardMat
+    BASE_COLOR: "#FF3333"
+    EMISSION: 1.0
+    EMISSION_COLOR: "#FF8888"
+  METADATA:
+    TAGS: [crystal, small, sharp, red, energetic]
+    SUITABILITY: [aesthetic_detail_crystal, accent_emitter]
+    DESCRIPTION: "A small, sharp red energy crystal."
+  COLLECTION: ModularParts_Crystals
+///
+
+ZW-MESH:
+  NAME: Twisted_Dark_Branch_A
+  TYPE: cylinder // Base for a branch
+  PARAMS:
+    VERTICES: 8
+    RADIUS: 0.05
+    DEPTH: 1.2
+  DEFORMATIONS:
+    - TYPE: twist
+      AXIS: Y
+      ANGLE: 120
+    - TYPE: displace
+      TEXTURE: noise // 'noise' will map to 'CLOUDS' or similar in zw_mesh.py
+      STRENGTH: 0.05
+      # TEX_SCALE: 10 // If zw_mesh.py supports TEX_SCALE for displace's texture
+  MATERIAL:
+    NAME: DarkWoodMat
+    BASE_COLOR: "#5C3A1A" // Dark brown
+  METADATA:
+    TAGS: [organic, branch, twisted, dark_wood, decor]
+    SUITABILITY: [aesthetic_detail_organic, detail]
+    DESCRIPTION: "A twisted, dark wooden branch segment."
+  COLLECTION: ModularParts_Organic
+///
