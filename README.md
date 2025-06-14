@@ -197,6 +197,15 @@ This milestone completes the foundational tools for ZWX intent routing and valid
 
 **Highlights:**
 - `.zwx` format with `ZW-INTENT` and `ZW-PAYLOAD` blocks is now fully supported.
+
+- `tools/engain_orbit.py` handles parsing and dispatch of intent directives.
+- `tools/orbit_watchdog.py` automates detection + execution of `.zwx` files dropped into a directory.
+- `tools/test_orbit_routing.py` provides automated integration testing with expected outcomes based on file naming.
+- Test outcomes are logged to `zw_mcp/logs/orbit_test_results.log`.
+
+**Status Tag:** ✅ Stable / Actively Maintained
+**Focus:** Integration testing, routing logic, automation reliability
+
 - `engain_orbit.py` handles intent parsing and dispatch.
 - `orbit_watchdog.py` automates detection + execution of `.zwx` files.
 - `test_orbit_routing.py` runs automated integration tests across valid/invalid ZWX cases.
@@ -204,6 +213,7 @@ This milestone completes the foundational tools for ZWX intent routing and valid
 
 **Status Tag:** ✅ Stable / Actively Maintained
 **Focus:** Integration testing, routing logic, reliability under automation
+
 
 ## Tools and Utilities
 
@@ -357,5 +367,4 @@ AGENT_CONFIG = {
 ```
 
 **Ready to create?** Start with our [Quickstart Guide](docs/QUICKSTART.md) or explore the [Example Gallery](examples/).
-Use `tools/engain_orbit.py` to run `.zwx` examples.
-
+Use `tools/engain_orbit.py` to run `.zwx` examples

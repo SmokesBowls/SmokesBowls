@@ -36,7 +36,6 @@ Or test the `orbit_watchdog.py` by copying files into its watch folder:
 cp zwx-test-suite/basic/valid_inline_payload.zwx zw_drop_folder/validated_patterns/
 ```
 
-
 This folder contains structured `.zwx` files used for testing `engain_orbit.py` and validating the intent routing system.
 
 ## Test Naming Convention
@@ -51,6 +50,5 @@ Run the test suite from the root:
 
 ```bash
 python tools/test_orbit_routing.py
-
 
 
