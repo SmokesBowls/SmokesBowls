@@ -1,0 +1,6 @@
+ZW-INTENT:
+  TARGET_SYSTEM: Godot
+  DESCRIPTION: Valid Godot routing intent (stubbed)
+---
+TYPE: PLAYER_SETUP
+MODEL: player.glb

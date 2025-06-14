@@ -1,0 +1,8 @@
+ZW-INTENT:
+  TARGET_SYSTEM: Blender
+  DESCRIPTION: Valid Blender intent with external file
+  ROUTE_FILE: scenes/scene1.zw
+---
+# This would be the referenced file content.
+ENTITY: Cube
+ACTION: Rotate
