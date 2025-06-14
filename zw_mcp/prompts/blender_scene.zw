@@ -140,3 +140,179 @@ ZW-ANIMATION:
 
 NOTE: This scene now includes ZW-STAGE tracks for PROPERTY_ANIM, MATERIAL_OVERRIDE, and SHADER_SWITCH, alongside other features.
 ///
+
+// --- Test Case for ZW-MESH (Phase 8.5) ---
+// Enhanced for Material Detail Test (Phase 9.1 Part 2)
+ZW-MESH:
+  NAME: Spirit_Tree_Test // This might already exist, ensure its MATERIAL block is detailed
+  TYPE: ico_sphere
+  PARAMS:
+    SUBDIVISIONS: 3
+    RADIUS: 1.5
+  DEFORMATIONS:
+    - TYPE: twist
+      AXIS: Z
+      ANGLE: 60
+    - TYPE: displace
+      TEXTURE: noise
+      STRENGTH: 0.4
+  MATERIAL:
+    NAME: SpiritGlowEnhancedMat // Potentially new material name
+    BASE_COLOR: "#7FFFD4"
+    EMISSION: 1.5
+    EMISSION_COLOR: "#9FFFFF"
+    ROUGHNESS: 0.1             // Test this
+    METALLIC: 0.2              // Test this
+    ALPHA: 0.9                 // Test this (for transparency)
+    SPECULAR: 0.7             // Test this
+  LOCATION: (0.0, 0.0, 0.0)
+  ROTATION: "(0.0, 0.0, 0.0)"
+  SCALE: "(1.0, 1.0, 1.0)"
+  COLLECTION: ProceduralObjects // Ensure it has a collection
+///
+
+// --- Test Case for ZW-MESH with Texture and Export (Phase 8.6) ---
+ZW-MESH:
+  NAME: Crystalline_Stone
+  TYPE: cylinder // Base primitive. zw_mesh.py create_base_mesh should handle this.
+  PARAMS:
+    VERTICES: 12
+    RADIUS: 0.8
+    DEPTH: 2.5
+  DEFORMATIONS:
+    - TYPE: displace
+      TEXTURE: noise // This will be handled by add_displace_deform, mapping "noise" to a Blender texture.
+      STRENGTH: 0.2
+  MATERIAL:
+    NAME: StoneMat          // Explicit name for the material
+    BASE_COLOR: "#CCCCCC"   // Light gray
+    EMISSION: 0.1           // Slight emission
+    TEXTURE:                // Texture definition block
+      TYPE: image
+      FILE: "assets/textures/stone_diffuse.png" // Path relative to project root
+      MAPPING: UV           // Indicates UV unwrapping is needed
+      SCALE: "(1.5, 1.5)"   // UV scale as a string tuple
+  LOCATION: "(2.0, 0.0, 1.25)" // Adjusted Z location assuming depth creates height from origin
+  ROTATION: "(0,0,0)"         // Default rotation
+  SCALE: "(1,1,1)"            // Default scale
+  COLLECTION: ProceduralAssets // Assign to a collection
+  EXPORT:                     // Export definition block
+    FORMAT: glb
+    FILE: "exports/crystalline_stone.glb" // Path relative to project root
+///
+
+// --- ZW-MESH Definitions for ZW-COMPOSE Test (Phase 9.0) ---
+
+ZW-MESH:
+  NAME: Base_Shrine
+  TYPE: cylinder // Base primitive for ZW-MESH
+  PARAMS:
+    VERTICES: 24
+    RADIUS: 2.0
+    DEPTH: 0.6
+  MATERIAL:
+    NAME: ShrineStoneMat // Explicit material name
+    BASE_COLOR: "#8B8B8B" // DarkGray
+    EMISSION: 0.05        // Slight emission
+  LOCATION: "(0.0, 0.0, 0.0)" // Set base location if needed, or compose will place it
+  COLLECTION: ShrineParts
+///
+
+ZW-MESH:
+  NAME: Crystal_Top
+  TYPE: ico_sphere // Base primitive
+  PARAMS:
+    SUBDIVISIONS: 2
+    RADIUS: 0.5
+  MATERIAL:
+    NAME: CrystalMat
+    BASE_COLOR: "#A3FFD3" // Aquamarine
+    EMISSION: 1.2
+    // Example of BSDF params that apply_material in zw_mesh.py might handle
+    // For now, only BASE_COLOR and EMISSION (+ EMISSION_COLOR) are explicitly handled by user's zw_mesh.py
+    // BSDF:
+    //   ROUGHNESS: 0.1
+    //   TRANSMISSION: 0.9
+  LOCATION: "(0.0, 0.0, 0.0)" // Initial local position, will be overridden by ZW-COMPOSE attachment
+  COLLECTION: ShrineParts
+///
+
+ZW-MESH:
+  NAME: Side_Shard
+  TYPE: cone // Base primitive
+  PARAMS:
+    VERTICES: 8     // Fewer vertices for a shard
+    RADIUS1: 0.15   // Wider base
+    RADIUS2: 0.0    // Pointy top
+    DEPTH: 0.7
+  MATERIAL:
+    NAME: ShardMat
+    BASE_COLOR: "#00FFFF" // Cyan
+    EMISSION: 0.7
+  LOCATION: "(0.0, 0.0, 0.0)" // Initial local position
+  COLLECTION: ShrineParts
+///
+
+// --- ZW-COMPOSE Test Case (Phase 9.0) ---
+ZW-COMPOSE:
+  NAME: CrystalShrine_Assembly // Name for the parent Empty of the assembly
+  BASE_MODEL: Base_Shrine     // References NAME of a ZW-MESH or ZW-OBJECT
+  LOCATION: "(0, 15, 0)"      // Location for the entire assembly's parent Empty
+  ROTATION: "(0,0,15)"        // Rotation for the entire assembly's parent Empty (degrees)
+  COLLECTION: ComposedScenes   // Collection for the parent Empty
+  ATTACHMENTS:
+    - OBJECT: Crystal_Top      // References NAME of a ZW-MESH or ZW-OBJECT
+      LOCATION: "(0.0, 0.0, 0.5)" // Local offset from Base_Shrine origin (or parent Empty)
+      ROTATION: "(0.0, 0.0, 0.0)" // Local rotation
+      SCALE: "(1.0, 1.0, 1.0)"    // Local scale
+      // No MATERIAL_OVERRIDE, so it uses its own CrystalMat
+
+    - OBJECT: Side_Shard
+      LOCATION: "(1.2, 0.0, 0.3)"  // Local offset
+      ROTATION: "(0.0, 90, 10)"   // Local rotation (degrees)
+      SCALE: "(0.8, 0.8, 1.0)"     // Local scale
+      MATERIAL_OVERRIDE:          // Override Side_Shard's material for this instance
+        NAME: OverriddenShardMat
+        BASE_COLOR: "#FF66CC"     // Pinkish override
+        EMISSION: 1.5
+        // BSDF: { ROUGHNESS: 0.05 } // Example if MATERIAL_OVERRIDE supported full BSDF
+  EXPORT: // Optional export for the assembled object
+    FORMAT: glb
+    FILE: "exports/crystal_shrine_assembly.glb"
+///
+
+// --- Test Case for Standalone ZW-METADATA (Phase 9.1 Part 2) ---
+ZW-OBJECT: // Ensure this object exists for ZW-METADATA to target
+  NAME: MetadataTargetObject
+  TYPE: Cube
+  LOCATION: "(-15, 0, 1)"
+  COLLECTION: TestCollection
+///
+
+ZW-METADATA:
+  TARGET: MetadataTargetObject // Name of an object defined in this ZW file
+  TAGS: [interactive, key_item, ancient_relic]
+  SUITABILITY: [quest_objective, puzzle_element]
+  CUSTOM_PROPERTY: "Can be activated"
+  UNLOCKS_FEATURE: "Phase_9_2_PowerUp"
+  NUMERIC_VALUE: 100
+///
+
+// --- Test Case for ZW-COMPOSE-TEMPLATE Storage (Phase 9.1 Part 2) ---
+ZW-COMPOSE-TEMPLATE:
+  NAME: SimplePedestalTemplate
+  DESCRIPTION: "A template for a simple pedestal with an item on top."
+  STYLE:
+    THEME: stone_ruins
+  SLOTS:
+    - ID: PEDESTAL_BASE
+      ROLE: base
+      REQUIRED_TAGS: [pedestal, stone]
+      LOCAL_TRANSFORM:
+        LOCATION: "(0,0,0)"
+    - ID: TOP_ITEM
+      ROLE: display_item
+      REQUIRED_TAGS: [artifact, small]
+      LOCAL_TRANSFORM:
+        LOCATION: "(0,0,0.5)" // Relative to PEDESTAL_BASE top (assuming base is 1 unit high)
+///
