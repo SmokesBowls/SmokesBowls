@@ -74,25 +74,25 @@ def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Ad
 
     blender_adapter_path = str(PROJECT_ROOT / "zw_mcp" / "blender_adapter.py")
 
-try:
-    subprocess.run([
-        BLENDER_EXECUTABLE_PATH,
-        "--background",
-        "--python", blender_adapter_path,
-        "--",
+    try:
+        subprocess.run([
+            BLENDER_EXECUTABLE_PATH,
+            "--background",
+            "--python", blender_adapter_path,
+            "--",
         "--input", temp_path
-    ], check=True)
+        ], check=True)
 
-    log_orbit_event(f"✔ Routed: {source_file_name} → Blender")
-except subprocess.CalledProcessError as e:
-    print(f"[ERROR] Blender execution failed: {e}")
-    log_orbit_event(f"❌ Execution FAILED: {source_file_name} → Blender - {e}")
-except FileNotFoundError:
-    error_msg = f"Blender executable not found at '{BLENDER_EXECUTABLE_PATH}'."
-    print(f"[ERROR] {error_msg} Please ensure it's installed and in PATH, or configure BLENDER_EXECUTABLE_PATH.")
-    log_orbit_event(f"❌ Execution FAILED: {source_file_name} → Blender - {error_msg}")
-finally:
-    Path(temp_path).unlink(missing_ok=True)
+        log_orbit_event(f"✔ Routed: {source_file_name} → Blender")
+    except subprocess.CalledProcessError as e:
+        print(f"[ERROR] Blender execution failed: {e}")
+        log_orbit_event(f"❌ Execution FAILED: {source_file_name} → Blender - {e}")
+    except FileNotFoundError:
+        error_msg = f"Blender executable not found at '{BLENDER_EXECUTABLE_PATH}'."
+        print(f"[ERROR] {error_msg} Please ensure it's installed and in PATH, or configure BLENDER_EXECUTABLE_PATH.")
+        log_orbit_event(f"❌ Execution FAILED: {source_file_name} → Blender - {error_msg}")
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
 
 
 def route_to_godot(intent: dict, zw_payload: str, source_file_name: str): # Added source_file_name for logging
