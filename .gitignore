@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+ENV/
+env/
+virtualenv/
+.venv/
+
+# Log files
+zw_mcp/logs/*.log
+orbit_exec.log
+orbit_watchdog.log
+orbit_test_results.log
+
+# Processed files from orbit_watchdog
+zw_drop_folder/executed/
+zw_drop_folder/failed/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
