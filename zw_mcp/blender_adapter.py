@@ -115,7 +115,7 @@ except ImportError:
         # sys.exit(1) # Or exit if critical
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw") # Default, can be overridden by args
-=======
+
     try:
         from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
         APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
