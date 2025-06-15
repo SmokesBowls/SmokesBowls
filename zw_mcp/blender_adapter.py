@@ -1,10 +1,11 @@
 # zw_mcp/blender_adapter.py
 import sys
-import json # For potential pretty printing if needed, not directly for to_zw
+import json  # For potential pretty printing if needed, not directly for to_zw
 from pathlib import Path
 import argparse
 import math  # Added for math.radians
 from mathutils import Vector, Euler  # For ZW-COMPOSE transforms
+import ast
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -131,6 +132,144 @@ except ImportError as e_pkg_utils:
         print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
         def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
             print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
+
+# --- Utility Functions ---
+def safe_eval(str_val, default_val):
+    """Safely evaluate a string to a Python literal."""
+    if not isinstance(str_val, str):
+        return default_val
+    try:
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError):
+        print(f"{P_WARN} safe_eval could not parse '{str_val}'. Using default {default_val}.")
+        return default_val
+
+
+def parse_color(color_val, default=(1.0, 1.0, 1.0, 1.0)):
+    """Parse a color definition from hex or tuple string formats."""
+    if not isinstance(color_val, str):
+        return default
+    val = color_val.strip()
+    if val.startswith("#"):
+        try:
+            r = int(val[1:3], 16) / 255.0
+            g = int(val[3:5], 16) / 255.0
+            b = int(val[5:7], 16) / 255.0
+            a = int(val[7:9], 16) / 255.0 if len(val) == 9 else 1.0
+            return (r, g, b, a)
+        except Exception:
+            return default
+    if val.startswith("(") and val.endswith(")"):
+        try:
+            tup = ast.literal_eval(val)
+            if isinstance(tup, (list, tuple)):
+                if len(tup) == 3:
+                    return (float(tup[0]), float(tup[1]), float(tup[2]), 1.0)
+                if len(tup) == 4:
+                    return (float(tup[0]), float(tup[1]), float(tup[2]), float(tup[3]))
+        except Exception:
+            return default
+    return default
+
+
+def handle_zw_object_creation(obj_data: dict, parent_bpy_obj=None):
+    """Create a Blender object from a ZW-OBJECT definition."""
+    if not bpy:
+        return None
+
+    if not isinstance(obj_data, dict):
+        print(f"{P_WARN} ZW-OBJECT data should be a dict, got {type(obj_data)}")
+        return None
+
+    obj_type = str(obj_data.get("TYPE", "Cube")).strip('"\' ').lower()
+    obj_name = str(obj_data.get("NAME", f"ZW_{obj_type}")).strip('"\' ')
+
+    loc = safe_eval(obj_data.get("LOCATION", "(0,0,0)"), (0, 0, 0))
+    rot_deg = safe_eval(obj_data.get("ROTATION", "(0,0,0)"), (0, 0, 0))
+    scale_val = safe_eval(obj_data.get("SCALE", "(1,1,1)"), (1, 1, 1))
+    if isinstance(scale_val, (int, float)):
+        scale = (float(scale_val), float(scale_val), float(scale_val))
+    else:
+        scale = tuple(scale_val)
+
+    # Create primitive based on type
+    primitive_func = {
+        "cube": bpy.ops.mesh.primitive_cube_add,
+        "sphere": bpy.ops.mesh.primitive_uv_sphere_add,
+        "plane": bpy.ops.mesh.primitive_plane_add,
+        "cone": bpy.ops.mesh.primitive_cone_add,
+        "cylinder": bpy.ops.mesh.primitive_cylinder_add,
+        "torus": bpy.ops.mesh.primitive_torus_add,
+        "grid": bpy.ops.mesh.primitive_grid_add,
+        "monkey": bpy.ops.mesh.primitive_monkey_add,
+    }.get(obj_type, bpy.ops.mesh.primitive_cube_add)
+
+    primitive_func(location=loc)
+    new_obj = bpy.context.active_object
+    if not new_obj:
+        print(f"{P_ERROR} Failed to create object of type '{obj_type}'.")
+        return None
+
+    new_obj.name = obj_name
+    new_obj.scale = scale
+    new_obj.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+    new_obj["ZW_TYPE"] = obj_type.capitalize()
+
+    # Material handling
+    material_name = obj_data.get("MATERIAL")
+    color_def = obj_data.get("COLOR")
+    bsdf_dict = obj_data.get("BSDF", {}) if isinstance(obj_data.get("BSDF"), dict) else {}
+    if material_name or color_def or bsdf_dict:
+        mat_name = material_name or f"{new_obj.name}_Material"
+        mat = bpy.data.materials.get(mat_name)
+        if not mat:
+            mat = bpy.data.materials.new(name=mat_name)
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+        bsdf = nodes.get("Principled BSDF")
+        if not bsdf:
+            bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+            out_node = nodes.get('Material Output') or nodes.new('ShaderNodeOutputMaterial')
+            links.new(bsdf.outputs['BSDF'], out_node.inputs['Surface'])
+
+        for k, v in bsdf_dict.items():
+            key = k.replace("_", " ").title()
+            if key in bsdf.inputs:
+                if "Color" in key:
+                    bsdf.inputs[key].default_value = parse_color(str(v), bsdf.inputs[key].default_value)
+                else:
+                    try:
+                        bsdf.inputs[key].default_value = float(v)
+                    except Exception:
+                        pass
+
+        if color_def and 'Base Color' not in bsdf_dict:
+            bsdf.inputs['Base Color'].default_value = parse_color(color_def, bsdf.inputs['Base Color'].default_value)
+
+        if new_obj.data.materials:
+            new_obj.data.materials[0] = mat
+        else:
+            new_obj.data.materials.append(mat)
+
+    shading = str(obj_data.get("SHADING", "Smooth")).lower()
+    if shading == "flat":
+        bpy.ops.object.shade_flat()
+    else:
+        bpy.ops.object.shade_smooth()
+
+    if parent_bpy_obj:
+        try:
+            new_obj.parent = parent_bpy_obj
+            bpy.ops.object.select_all(action='DESELECT')
+            new_obj.select_set(True)
+            parent_bpy_obj.select_set(True)
+            bpy.context.view_layer.objects.active = parent_bpy_obj
+            bpy.ops.object.parent_set(type='OBJECT', keep_transform=True)
+        except Exception as e:
+            print(f"{P_WARN} Failed to parent '{new_obj.name}' to '{parent_bpy_obj.name}': {e}")
+
+    return new_obj
 
 # --- New ZW-METADATA Handler ---
 def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
