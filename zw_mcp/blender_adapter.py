@@ -134,8 +134,6 @@ except ImportError as e_pkg_utils:
         def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
             print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
-    
-
 # --- New ZW-METADATA Handler ---
 def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
