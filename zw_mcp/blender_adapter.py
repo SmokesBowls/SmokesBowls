@@ -511,8 +511,8 @@ def run_blender_adapter(input_filepath_str: str = None):
     try:
         print(f"{P_INFO} Parsing ZW text from '{input_filepath_str}'...")
         parsed_zw_data = parse_zw(zw_text_content)
-    if not parsed_zw_data:
-        print(f"{P_WARN} Parsed ZW data from '{input_filepath_str}' is empty. No objects will be created.")
+        if not parsed_zw_data:
+            print(f"{P_WARN} Parsed ZW data from '{input_filepath_str}' is empty. No objects will be created.")
     except Exception as e:
         print(f"{P_ERROR} Error parsing ZW text from '{input_filepath_str}': {e}")
         print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
@@ -527,7 +527,7 @@ def run_blender_adapter(input_filepath_str: str = None):
         print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
         return
 
-        print(f"{P_SUCCESS} --- ZW Blender Adapter Finished Successfully ---")
+    print(f"{P_SUCCESS} --- ZW Blender Adapter Finished Successfully ---")
 
 
 # --- ZW-COMPOSE Handler ---
