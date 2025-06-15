@@ -6,6 +6,7 @@ import argparse
 import math # Added for math.radians
 from pathlib import Path # Ensure Path is imported for handle_zw_compose_block
 from mathutils import Vector, Euler # For ZW-COMPOSE transforms
+import ast
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -114,24 +115,24 @@ except ImportError:
             return {}
         # sys.exit(1) # Or exit if critical
 
-ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw") # Default, can be overridden by args
+ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
 
+try:
+    from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
+    APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
+    ZW_MESH_UTILS_IMPORTED = True
+    print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
+except ImportError as e_pkg_utils:
+    print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
     try:
-        from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
-        APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
+        from zw_mesh import apply_material as direct_imported_apply_material
+        APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
         ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
-    except ImportError as e_pkg_utils:
-        print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
-        try:
-            from zw_mesh import apply_material as direct_imported_apply_material
-            APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
-            ZW_MESH_UTILS_IMPORTED = True
-            print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
-        except ImportError as e_direct_utils:
-            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
-            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
-                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
+        print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
+    except ImportError as e_direct_utils:
+        print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
+        def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
+            print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
@@ -387,8 +388,8 @@ def safe_eval(str_val, default_val):
     if not isinstance(str_val, str):
         return default_val
     try:
-        return eval(str_val)
-    except (SyntaxError, NameError, TypeError, ValueError) as e:
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError) as e:
         print(f"    [!] Warning: Could not evaluate string '{str_val}' for attribute: {e}. Using default: {default_val}")
         return default_val
 
@@ -897,9 +898,11 @@ def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Co
 nt(f"    ✅ Finished ZW-COMPOSE assembly: {compose_name}")
 
 def safe_eval(str_val, default_val):
-    if not isinstance(str_val, str): return default_val
-    try: return eval(str_val)
-    except (SyntaxError, NameError, TypeError, ValueError) as e:
+    if not isinstance(str_val, str):
+        return default_val
+    try:
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError) as e:
         print(f"    {P_WARN} Could not evaluate string '{str_val}' for attribute: {e}. Using default: {default_val}")
         return default_val
 
