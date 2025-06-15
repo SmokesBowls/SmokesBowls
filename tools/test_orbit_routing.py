@@ -12,16 +12,6 @@ def determine_expectation(file_path: Path) -> str:
     name = file_path.name.lower()
     return "fail" if name.startswith("invalid_") else "pass"
 
-def run_test(file_path: Path) -> tuple[bool, str]:
-    expected = determine_expectation(file_path)
-    result = subprocess.run(
-        ["python3", "tools/engain_orbit.py", str(file_path)],
-        capture_output=True,
-        text=True
-    )
-    passed = (result.returncode != 0 if expected == "fail" else result.returncode == 0)
-    return passed, expected
-
 def log_result(file_path: Path, passed: bool, expected: str, result_code: int, stdout: str, stderr: str):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with LOG_PATH.open("a", encoding="utf-8") as log:

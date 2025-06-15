@@ -3,10 +3,8 @@ import sys
 import json # For potential pretty printing if needed, not directly for to_zw
 from pathlib import Path
 import argparse
-import math # Added for math.radians
-from pathlib import Path # Ensure Path is imported for handle_zw_compose_block
-from mathutils import Vector, Euler # For ZW-COMPOSE transforms
-import ast
+import math  # Added for math.radians
+from mathutils import Vector, Euler  # For ZW-COMPOSE transforms
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -637,11 +635,11 @@ def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Co
             # Handle MATERIAL_OVERRIDE for this attachment
             material_override_def = attach_def.get("MATERIAL_OVERRIDE")
             if isinstance(material_override_def, dict):
-                if ZW_MESH_UTILS_IMPORTED and APPLY_ZW_MESH_MATERIAL_FUNC:
+                if ZW_MESH_UTILS_IMPORTED and APPLY_ZW_MATERIAL_FUNC:
                     print(f"          Applying MATERIAL_OVERRIDE to '{attached_obj.name}'")
                     if 'NAME' not in material_override_def:
                         material_override_def['NAME'] = f"{attached_obj.name}_OverrideMat"
-                    APPLY_ZW_MESH_MATERIAL_FUNC(attached_obj, material_override_def)
+                    APPLY_ZW_MATERIAL_FUNC(attached_obj, material_override_def)
                 else:
                     print(f"          [Warning] MATERIAL_OVERRIDE found for '{attached_obj.name}', but zw_mesh.apply_material function was not imported.")
         else:

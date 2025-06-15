@@ -2,16 +2,19 @@
 import bpy
 import math
 from pathlib import Path
-from mathutils import Vector # Explicitly import Vector
+from mathutils import Vector  # Explicitly import Vector
+import ast
 
 # Helper function (ensure this is robust or imported from a shared utility module if available)
 def safe_eval(str_val, default_val):
     if not isinstance(str_val, str):
         return default_val
     try:
-        return eval(str_val)
-    except (SyntaxError, NameError, TypeError, ValueError) as e:
-        print(f"    [!] Warning (safe_eval in zw_mesh.py): Could not evaluate string '{str_val}': {e}. Using default: {default_val}")
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError):
+        print(
+            f"    [!] Warning (safe_eval in zw_mesh.py): Could not evaluate string '{str_val}'. Using default: {default_val}"
+        )
         return default_val
 
 # --- Stub/Placeholder Functions (assumed to exist or be developed) ---
