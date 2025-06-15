@@ -446,7 +446,7 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
         # else:
             # print(f"  Skipping non-dictionary, non-ZW-block value for key '{key}'")
 
-ure/intent-routing-enhancements
+ #ure/intent-routing-enhancements
 def run_blender_adapter():
     print(f"{P_INFO} --- Starting ZW Blender Adapter ---")
     if not bpy: print(f"{P_ERROR} Blender Python environment (bpy) not detected. Cannot proceed."); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
