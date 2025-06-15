@@ -76,7 +76,7 @@ ZW-NARRATIVE:
 - Python 3.9+
 - [Ollama](https://ollama.ai/) (local instance)
 - Blender 3.0+
-- Required packages: `pip install requests numpy`
+- Install dependencies with `pip install -r requirements.txt`
 
 ### Installation
 ```bash
@@ -368,5 +368,5 @@ AGENT_CONFIG = {
 }
 ```
 
-**Ready to create?** Start with our [Quickstart Guide](docs/QUICKSTART.md) or explore the [Example Gallery](examples/).
+**Ready to create?** Explore the [Example Gallery](examples/) while we finalize the Quickstart guide.
 
