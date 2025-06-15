@@ -1,0 +1,7 @@
+ZW-INTENT:
+  TARGET_SYSTEM: Blender
+  DESCRIPTION: Inline payload test
+---
+TYPE: SCENE_SETUP
+ENTITY: Sphere
+ACTION: Bounce
