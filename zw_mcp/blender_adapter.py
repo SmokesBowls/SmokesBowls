@@ -509,17 +509,26 @@ def run_blender_adapter(input_filepath_str: str = None):
 
 
     try:
-        print(f"{P_INFO} Parsing ZW text from '{current_zw_input_file}'..."); parsed_zw_data = parse_zw(zw_text_content)
-        if not parsed_zw_data: print(f"{P_WARN} Parsed ZW data from '{current_zw_input_file}' is empty. No objects will be created.")
-    except Exception as e: print(f"{P_ERROR} Error parsing ZW text from '{current_zw_input_file}': {e}"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
+        print(f"{P_INFO} Parsing ZW text from '{input_filepath_str}'...")
+        parsed_zw_data = parse_zw(zw_text_content)
+    if not parsed_zw_data:
+        print(f"{P_WARN} Parsed ZW data from '{input_filepath_str}' is empty. No objects will be created.")
+    except Exception as e:
+        print(f"{P_ERROR} Error parsing ZW text from '{input_filepath_str}': {e}")
+        print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
+        return
 
     try:
         print(f"{P_INFO} Processing ZW structure for Blender object creation...")
         process_zw_structure(parsed_zw_data, current_bpy_collection=bpy.context.scene.collection)
-        print(f"{P_INFO} Finished processing ZW structure from '{current_zw_input_file}'.")
-    except Exception as e: print(f"{P_ERROR} Error during ZW structure processing for Blender from '{current_zw_input_file}': {e}"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
+        print(f"{P_INFO} Finished processing ZW structure from '{input_filepath_str}'.")
+    except Exception as e:
+        print(f"{P_ERROR} Error during ZW structure processing for Blender from '{input_filepath_str}': {e}")
+        print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
+        return
 
-    print(f"{P_SUCCESS} --- ZW Blender Adapter Finished Successfully ---")
+        print(f"{P_SUCCESS} --- ZW Blender Adapter Finished Successfully ---")
+
 
 # --- ZW-COMPOSE Handler ---
 def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
