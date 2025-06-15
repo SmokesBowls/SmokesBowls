@@ -116,24 +116,23 @@ except ImportError:
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw") # Default, can be overridden by args
 
+try:
+    from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
+    APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
+    ZW_MESH_UTILS_IMPORTED = True
+    print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
+except ImportError as e_pkg_utils:
+    print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
     try:
-        from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
-        APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
+        from zw_mesh import apply_material as direct_imported_apply_material
+        APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
         ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
-    except ImportError as e_pkg_utils:
-        print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
-        try:
-            from zw_mesh import apply_material as direct_imported_apply_material
-            APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
-            ZW_MESH_UTILS_IMPORTED = True
-            print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
-        except ImportError as e_direct_utils:
-            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
-            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
-                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
+        print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
+    except ImportError as e_direct_utils:
+        print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
+        def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
+            print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
-def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
 
     target_name = target_obj_name or metadata_data.get("TARGET")
@@ -161,7 +160,6 @@ def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
             print(f"    [Error] Failed to set custom property ZW_{key.upper()} on {target_obj.name}: {e}")
 
 # --- New ZW-COMPOSE-TEMPLATE Handler ---
-def handle_zw_compose_template_block(template_data: dict):
     if not bpy: return
     template_name = template_data.get("NAME", "UnnamedZWTemplate")
     print(f"  Storing ZW-COMPOSE-TEMPLATE: {template_name}")
@@ -182,7 +180,6 @@ def handle_zw_compose_template_block(template_data: dict):
         print(f"    [Error] Failed to store ZW-COMPOSE-TEMPLATE '{template_name}': {e}")
 
 # --- New Integrated ZW-MESH Handler ---
-def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Collection):
     if not bpy: return None
     mesh_name = mesh_data.get("NAME", "UnnamedZWMesh")
     print(f"  Processing ZW-MESH (integrated): {mesh_name}")
@@ -270,7 +267,6 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 # --- ZW-COMPOSE Handler (Refined for object duplication and custom props) ---
-def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
     if not bpy:
         print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
         return
@@ -383,7 +379,6 @@ def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Co
         else: print(f"    [Warning] EXPORT for '{compose_name}' missing format/file or not 'glb'.")
     print(f"    ✅ Finished ZW-COMPOSE assembly: {compose_name}")
 
-def safe_eval(str_val, default_val):
     if not isinstance(str_val, str):
         return default_val
     try:
@@ -393,7 +388,6 @@ def safe_eval(str_val, default_val):
         return default_val
 
 # --- New ZW-METADATA Handler ---
-def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
 
     target_name = target_obj_name or metadata_data.get("TARGET")
@@ -421,7 +415,6 @@ def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
             print(f"    [Error] Failed to set custom property ZW_{key.upper()} on {target_obj.name}: {e}")
 
 # --- New ZW-COMPOSE-TEMPLATE Handler ---
-def handle_zw_compose_template_block(template_data: dict):
     if not bpy: return
     template_name = template_data.get("NAME", "UnnamedZWTemplate")
     print(f"  Storing ZW-COMPOSE-TEMPLATE: {template_name}")
@@ -442,7 +435,6 @@ def handle_zw_compose_template_block(template_data: dict):
         print(f"    [Error] Failed to store ZW-COMPOSE-TEMPLATE '{template_name}': {e}")
 
 # --- New Integrated ZW-MESH Handler (replaces external call) ---
-def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Collection):
     if not bpy: return None
     mesh_name = mesh_data.get("NAME", "UnnamedZWMesh")
     print(f"  Processing ZW-MESH (integrated): {mesh_name}")
@@ -530,7 +522,6 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 # --- ZW-COMPOSE Handler (Refined for object duplication and custom props) ---
-def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
     if not bpy:
         print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
         return
@@ -645,7 +636,6 @@ def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Co
 
 
 # --- New ZW-METADATA Handler ---
-def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
 
     target_name = target_obj_name or metadata_data.get("TARGET")
@@ -673,7 +663,6 @@ def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
             print(f"    [Error] Failed to set custom property ZW_{key.upper()} on {target_obj.name}: {e}")
 
 # --- New ZW-COMPOSE-TEMPLATE Handler ---
-def handle_zw_compose_template_block(template_data: dict):
     if not bpy: return
     template_name = template_data.get("NAME", "UnnamedZWTemplate")
     print(f"  Storing ZW-COMPOSE-TEMPLATE: {template_name}")
@@ -694,7 +683,6 @@ def handle_zw_compose_template_block(template_data: dict):
         print(f"    [Error] Failed to store ZW-COMPOSE-TEMPLATE '{template_name}': {e}")
 
 # --- New Integrated ZW-MESH Handler ---
-def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Collection):
     if not bpy: return None
     mesh_name = mesh_data.get("NAME", "UnnamedZWMesh")
     print(f"  Processing ZW-MESH (integrated): {mesh_name}")
@@ -782,7 +770,6 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 # --- ZW-COMPOSE Handler (Refined for object duplication and custom props) ---
-def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
     if not bpy:
         print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
         return
@@ -904,7 +891,6 @@ def safe_eval(str_val, default_val):
         return default_val
 
 # --- New ZW-METADATA Handler ---
-def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
     if not bpy: return
 
     target_name = target_obj_name or metadata_data.get("TARGET")
@@ -932,7 +918,6 @@ def handle_zw_metadata_block(metadata_data: dict, target_obj_name: str = None):
             print(f"    [Error] Failed to set custom property ZW_{key.upper()} on {target_obj.name}: {e}")
 
 # --- New ZW-COMPOSE-TEMPLATE Handler ---
-def handle_zw_compose_template_block(template_data: dict):
     if not bpy: return
     template_name = template_data.get("NAME", "UnnamedZWTemplate")
     print(f"  Storing ZW-COMPOSE-TEMPLATE: {template_name}")
@@ -953,7 +938,6 @@ def handle_zw_compose_template_block(template_data: dict):
         print(f"    [Error] Failed to store ZW-COMPOSE-TEMPLATE '{template_name}': {e}")
 
 # --- New Integrated ZW-MESH Handler ---
-def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Collection):
     if not bpy: return None
     mesh_name = mesh_data.get("NAME", "UnnamedZWMesh")
     print(f"  Processing ZW-MESH (integrated): {mesh_name}")
@@ -1041,7 +1025,6 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 # --- ZW-COMPOSE Handler (Refined for object duplication and custom props) ---
-def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
     if not bpy:
         print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
         return
@@ -1902,7 +1885,6 @@ def handle_zw_stage_block(stage_data: dict):
     print(f"{P_INFO} Finished processing ZW-STAGE: '{stage_name}'")
 
 # --- ZW-COMPOSE Handler (refined) ---
-def handle_zw_compose_block(compose_data: dict, default_collection: bpy.types.Collection):
     if not bpy:
         print("[Error] bpy module not available in handle_zw_compose_block. Cannot process ZW-COMPOSE.")
         return
