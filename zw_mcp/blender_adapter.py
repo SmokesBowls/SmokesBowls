@@ -6,6 +6,7 @@ import argparse
 import math # Added for math.radians
 from pathlib import Path # Ensure Path is imported for handle_zw_compose_block
 from mathutils import Vector, Euler # For ZW-COMPOSE transforms
+import ast
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -114,7 +115,7 @@ except ImportError:
             return {}
         # sys.exit(1) # Or exit if critical
 
-ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw") # Default, can be overridden by args
+ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
 
 try:
     from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
@@ -382,8 +383,8 @@ except ImportError as e_pkg_utils:
     if not isinstance(str_val, str):
         return default_val
     try:
-        return eval(str_val)
-    except (SyntaxError, NameError, TypeError, ValueError) as e:
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError) as e:
         print(f"    [!] Warning: Could not evaluate string '{str_val}' for attribute: {e}. Using default: {default_val}")
         return default_val
 
@@ -884,9 +885,11 @@ except ImportError as e_pkg_utils:
 nt(f"    ✅ Finished ZW-COMPOSE assembly: {compose_name}")
 
 def safe_eval(str_val, default_val):
-    if not isinstance(str_val, str): return default_val
-    try: return eval(str_val)
-    except (SyntaxError, NameError, TypeError, ValueError) as e:
+    if not isinstance(str_val, str):
+        return default_val
+    try:
+        return ast.literal_eval(str_val)
+    except (ValueError, SyntaxError) as e:
         print(f"    {P_WARN} Could not evaluate string '{str_val}' for attribute: {e}. Using default: {default_val}")
         return default_val
 
