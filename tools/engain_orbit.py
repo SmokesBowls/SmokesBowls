@@ -15,8 +15,6 @@ sys.path.append(str(PROJECT_ROOT))
 
 # Import the validator
 from tools.intent_utils import validate_zw_intent_block
-from zw_mcp.zw_parser import parse_zw, to_zw, prettify_zw
-
 # Placeholder for BLENDER_EXECUTABLE_PATH
 BLENDER_EXECUTABLE_PATH = "blender"
 
@@ -66,7 +64,7 @@ def parse_zwx_file_and_extract_raw_intent(filepath: Path) -> Tuple[Optional[str]
     return raw_intent_str, intent_dict, payload_str
 
 
-def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Added source_file_name for logging
+def route_to_blender(zw_payload: str, source_file_name: str):
     print("[EngAIn-Orbit] Routing to Blender...")
     zw_payload_content = zw_payload if zw_payload is not None else ""
     with tempfile.NamedTemporaryFile("w", suffix=".zw", delete=False, encoding='utf-8') as temp:
@@ -97,7 +95,7 @@ def route_to_blender(intent: dict, zw_payload: str, source_file_name: str): # Ad
         Path(temp_path).unlink(missing_ok=True)
 
 
-def route_to_godot(intent: dict, zw_payload: str, source_file_name: str): # Added source_file_name for logging
+def route_to_godot(zw_payload: str, source_file_name: str):
     # TODO: Implement Godot routing logic
     godot_message = "[EngAIn-Orbit] Routing to Godot not implemented yet."
     print(godot_message)
@@ -141,7 +139,7 @@ def execute_orbit(zwx_file: Path):
         if payload_str and not raw_intent_str:
             print("[EngAIn-Orbit] Running direct ZW payload (no explicit ZW-INTENT block, defaulting to Blender)...")
             # Log for direct payload routing will be handled by route_to_blender
-            route_to_blender(current_intent_dict, payload_str, source_file_name)
+            route_to_blender(payload_str, source_file_name)
             return
         else:
             error_message = f"No TARGET_SYSTEM found in intent block: {source_file_name}"
@@ -158,9 +156,9 @@ def execute_orbit(zwx_file: Path):
     actual_payload_for_routing = payload_str if payload_str is not None else ""
 
     if target_system == "blender":
-        route_to_blender(current_intent_dict, actual_payload_for_routing, source_file_name)
+        route_to_blender(actual_payload_for_routing, source_file_name)
     elif target_system == "godot":
-        route_to_godot(current_intent_dict, actual_payload_for_routing, source_file_name)
+        route_to_godot(actual_payload_for_routing, source_file_name)
     else:
         error_message = f"Unknown TARGET_SYSTEM '{target_system}' in intent block for {source_file_name}."
         print(f"[ERROR] {error_message}")
