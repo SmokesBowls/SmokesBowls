@@ -6,7 +6,16 @@ import argparse
 import math  # Added for math.radians
 from mathutils import Vector, Euler  # For ZW-COMPOSE transforms
 
-from zw_mcp.utils import safe_eval, parse_color
+from zw_mcp.utils import safe_eval
+
+
+def parse_color(value, default=(0.8, 0.8, 0.8, 1.0)):
+    if isinstance(value, (list, tuple)) and len(value) in (3, 4):
+        parsed = tuple(float(v) for v in value[:4])
+        if len(parsed) == 3:
+            return parsed + (1.0,)
+        return parsed
+    return default
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -585,6 +594,7 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
 
 
 def run_blender_adapter(input_filepath_str: str = None):
+    current_zw_input_file = input_filepath_str
     print("--- Starting ZW Blender Adapter ---")
     if not bpy:
         print("[X] Blender Python environment (bpy) not detected. Cannot proceed.")

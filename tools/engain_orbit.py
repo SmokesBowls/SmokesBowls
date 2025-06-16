@@ -7,14 +7,13 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from tools.intent_utils import validate_zw_intent_block
+
 import datetime # Added for logging timestamp
 
 # Corrected sys.path modification:
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 sys.path.append(str(PROJECT_ROOT))
-
-# Import the validator
-from tools.intent_utils import validate_zw_intent_block
 # Placeholder for BLENDER_EXECUTABLE_PATH
 BLENDER_EXECUTABLE_PATH = "blender"
 
@@ -76,11 +75,13 @@ def route_to_blender(zw_payload: str, source_file_name: str):
     try:
 
         subprocess.run([
-            BLENDER_EXECUTABLE_PATH,
+            str(BLENDER_EXECUTABLE_PATH),
             "--background",
-            "--python", blender_adapter_path,
+            "--python",
+            str(blender_adapter_path),
             "--",
-        "--input", temp_path
+            "--input",
+            str(temp_path),
         ], check=True)
 
         log_orbit_event(f"✔ Routed: {source_file_name} → Blender")
@@ -107,7 +108,7 @@ def execute_orbit(zwx_file: Path):
 
     source_file_name = str(zwx_file) # For logging
 
-    if raw_intent_str is None and parsed_intent_dict == {} and payload_str is None:
+    if raw_intent_str is None and not parsed_intent_dict and payload_str is None:
         # This case implies a file read error in parse_zwx_file_and_extract_raw_intent
         # The error would have been printed by the original user code, let's log it too
         log_orbit_event(f"❌ File Error: Could not read or access {source_file_name}.")
