@@ -418,6 +418,25 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 
+# --- Stub Handlers for unimplemented ZW blocks ---
+def handle_zw_light_block(*args, **kwargs):
+    print("[Stub] handle_zw_light_block not yet implemented.")
+
+def handle_zw_function_block(*args, **kwargs):
+    print("[Stub] handle_zw_function_block not yet implemented.")
+
+def handle_zw_driver_block(*args, **kwargs):
+    print("[Stub] handle_zw_driver_block not yet implemented.")
+
+def handle_zw_animation_block(*args, **kwargs):
+    print("[Stub] handle_zw_animation_block not yet implemented.")
+
+def handle_zw_camera_block(*args, **kwargs):
+    print("[Stub] handle_zw_camera_block not yet implemented.")
+
+def handle_zw_stage_block(*args, **kwargs):
+    print("[Stub] handle_zw_stage_block not yet implemented.")
+
 
 
 
