@@ -97,41 +97,31 @@ except ImportError as e_final:
 APPLY_ZW_MATERIAL_FUNC = None
 ZW_MESH_UTILS_IMPORTED = False
 try:
-    from .zw_mesh import apply_material as imported_apply_material
+    # Package style import
+    from zw_mcp.zw_mesh import apply_material as imported_apply_material
     APPLY_ZW_MATERIAL_FUNC = imported_apply_material
-    ZW_MESH_UTILS_IMPORTED = True # We only strictly need apply_material for ZW-COMPOSE material override
-    print("Successfully imported apply_material from .zw_mesh (relative).")
+    ZW_MESH_UTILS_IMPORTED = True
+    print("Successfully imported apply_material from zw_mcp.zw_mesh.")
 except ImportError:
-
-    print(f"{P_WARN} Could not import 'parse_zw' from 'zw_mcp.zw_parser'.")
     try:
-        from zw_parser import parse_zw # Attempt direct import if in same folder for some reason
-    except ImportError:
-        print(f"{P_WARN} Fallback import of 'parse_zw' also failed.")
-        print(f"{P_WARN} Ensure 'zw_parser.py' is accessible and zw_mcp is in PYTHONPATH or script is run appropriately.")
-        def parse_zw(text: str) -> dict:
-            print(f"{P_WARN} Dummy parse_zw called. Real parsing will not occur.")
-            return {}
-        # sys.exit(1) # Or exit if critical
+        # Relative import when running from within package
+        from .zw_mesh import apply_material as imported_apply_material
+        APPLY_ZW_MATERIAL_FUNC = imported_apply_material
+        ZW_MESH_UTILS_IMPORTED = True
+        print("Successfully imported apply_material from .zw_mesh.")
+    except Exception:
+        try:
+            # Fallback for direct execution from repo root
+            from zw_mesh import apply_material as imported_apply_material
+            APPLY_ZW_MATERIAL_FUNC = imported_apply_material
+            ZW_MESH_UTILS_IMPORTED = True
+            print("Successfully imported apply_material from zw_mesh (script directory).")
+        except ImportError as e_direct:
+            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct}")
+            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
+                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
-
-try:
-    from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
-    APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
-    ZW_MESH_UTILS_IMPORTED = True
-    print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
-except ImportError as e_pkg_utils:
-    print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
-    try:
-        from zw_mesh import apply_material as direct_imported_apply_material
-        APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
-        ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
-    except ImportError as e_direct_utils:
-        print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
-        def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
-            print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 # --- Utility Functions ---
 def safe_eval(str_val, default_val):
@@ -428,119 +418,7 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 
-def handle_zw_camera_block(cam_data: dict, current_bpy_collection=None):
-    """Create a Blender camera from a ZW-CAMERA block."""
-    if not bpy:
-        return None
 
-    collection = current_bpy_collection or bpy.context.scene.collection
-
-    cam_name = cam_data.get("NAME", "ZW_Camera")
-    loc = safe_eval(cam_data.get("LOCATION", "(0,0,0)"), (0, 0, 0))
-    rot_deg = safe_eval(cam_data.get("ROTATION", "(0,0,0)"), (0, 0, 0))
-
-    bpy.ops.object.camera_add(location=loc)
-    cam_obj = bpy.context.active_object
-    if not cam_obj:
-        print(f"{P_ERROR} Failed to create camera '{cam_name}'.")
-        return None
-
-    cam_obj.name = cam_name
-    cam_obj.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
-
-    fov = cam_data.get("FOV")
-    if fov is not None:
-        try:
-            cam_obj.data.angle = math.radians(float(fov))
-        except Exception:
-            pass
-
-    clip_start = cam_data.get("CLIP_START")
-    if clip_start is not None:
-        try:
-            cam_obj.data.clip_start = float(clip_start)
-        except Exception:
-            pass
-
-    clip_end = cam_data.get("CLIP_END")
-    if clip_end is not None:
-        try:
-            cam_obj.data.clip_end = float(clip_end)
-        except Exception:
-            pass
-
-    track_target_name = cam_data.get("TRACK_TARGET")
-    if track_target_name:
-        target = bpy.data.objects.get(str(track_target_name))
-        if target:
-            constraint = cam_obj.constraints.new('TRACK_TO')
-            constraint.target = target
-            constraint.track_axis = 'TRACK_NEGATIVE_Z'
-            constraint.up_axis = 'UP_Y'
-
-    coll_name = cam_data.get("COLLECTION")
-    target_collection = collection
-    if coll_name:
-        target_collection = get_or_create_collection(str(coll_name), bpy.context.scene.collection)
-
-    for c in cam_obj.users_collection:
-        c.objects.unlink(cam_obj)
-    if cam_obj.name not in target_collection.objects:
-        target_collection.objects.link(cam_obj)
-
-    print(f"    ✅ Created camera '{cam_obj.name}' in collection '{target_collection.name}'")
-    return cam_obj
-
-
-def handle_zw_light_block(light_data: dict, current_bpy_collection=None):
-    """Create a Blender light from a ZW-LIGHT block."""
-    if not bpy:
-        return None
-
-    collection = current_bpy_collection or bpy.context.scene.collection
-
-    light_name = light_data.get("NAME", "ZW_Light")
-    light_type = str(light_data.get("TYPE", "POINT")).upper()
-    loc = safe_eval(light_data.get("LOCATION", "(0,0,0)"), (0, 0, 0))
-    rot_deg = safe_eval(light_data.get("ROTATION", "(0,0,0)"), (0, 0, 0))
-    color = parse_color(light_data.get("COLOR", "#FFFFFF"))
-    energy = float(light_data.get("ENERGY", 10.0))
-    shadow_str = str(light_data.get("SHADOW", "true")).lower()
-    use_shadow = shadow_str not in ["false", "0", "no", "off"]
-
-    light_data_block = bpy.data.lights.new(name=light_name, type=light_type)
-    light_obj = bpy.data.objects.new(light_name, light_data_block)
-    light_obj.location = loc
-    light_obj.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
-
-    light_data_block.color = color[:3]
-    light_data_block.energy = energy
-    light_data_block.use_shadow = use_shadow
-
-    size_val = light_data.get("SIZE")
-    if size_val is not None:
-        try:
-            light_data_block.size = float(size_val)
-        except Exception:
-            pass
-
-    angle_val = light_data.get("ANGLE")
-    if angle_val is not None and hasattr(light_data_block, "angle"):
-        try:
-            light_data_block.angle = float(angle_val)
-        except Exception:
-            pass
-
-    coll_name = light_data.get("COLLECTION")
-    target_collection = collection
-    if coll_name:
-        target_collection = get_or_create_collection(str(coll_name), bpy.context.scene.collection)
-
-    if light_obj.name not in target_collection.objects:
-        target_collection.objects.link(light_obj)
-
-    print(f"    ✅ Created light '{light_obj.name}' in collection '{target_collection.name}'")
-    return light_obj
 
 
 # --- Main Processing Logic ---
@@ -721,28 +599,6 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
         # else:
             # print(f"  Skipping non-dictionary, non-ZW-block value for key '{key}'")
 
- #ure/intent-routing-enhancements
-def run_blender_adapter():
-    print(f"{P_INFO} --- Starting ZW Blender Adapter ---")
-    if not bpy: print(f"{P_ERROR} Blender Python environment (bpy) not detected. Cannot proceed."); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    if bpy.context.object and bpy.context.object.mode != 'OBJECT': bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Argument parsing for input file
-    parser = argparse.ArgumentParser(description="Blender adapter for ZW MCP")
-    parser.add_argument('--input', type=str, help="Path to the ZW input file", default=str(ZW_INPUT_FILE_PATH))
-
-    # Blender's Python interpreter passes arguments after '--'
-    args_to_parse = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    args = parser.parse_args(args_to_parse)
-
-    current_zw_input_file = Path(args.input)
-
-    try:
-        with open(current_zw_input_file, "r", encoding="utf-8") as f: zw_text_content = f.read()
-        print(f"{P_INFO} Successfully read ZW file: {current_zw_input_file}")
-    except FileNotFoundError: print(f"{P_ERROR} ZW input file not found at '{current_zw_input_file}'"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    except Exception as e: print(f"{P_ERROR} Error reading ZW file '{current_zw_input_file}': {e}"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    if not zw_text_content.strip(): print(f"{P_ERROR} ZW input file is empty: '{current_zw_input_file}'."); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
 
 def run_blender_adapter(input_filepath_str: str = None):
     print("--- Starting ZW Blender Adapter ---")
