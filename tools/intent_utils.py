@@ -1,10 +1,13 @@
 """Utilities for handling ZW-INTENT blocks."""
 
+from typing import Union
+
+
 def get_indentation(line_text: str) -> int:
     """Calculates the leading whitespace indentation of a string."""
     return len(line_text) - len(line_text.lstrip())
 
-def validate_zw_intent_block(intent_string: str) -> dict | str:
+def validate_zw_intent_block(intent_string: str) -> Union[dict, str]:
     """
     Parses and validates a ZW-INTENT block string.
     Checks for TARGET_SYSTEM and either ROUTE_FILE or an inline ZW-PAYLOAD.
