@@ -162,6 +162,27 @@ def parse_color(color_val, default=(1.0, 1.0, 1.0, 1.0)):
     return default
 
 
+def get_or_create_collection(name: str, parent_collection=None):
+    """Retrieve or create a Blender collection by name."""
+    if not bpy:
+        return None
+
+    if not name:
+        return bpy.context.scene.collection
+
+    parent = parent_collection or bpy.context.scene.collection
+    collection = bpy.data.collections.get(name)
+    if not collection:
+        collection = bpy.data.collections.new(name)
+        parent.children.link(collection)
+        print(f"{P_INFO} Created collection '{name}' under '{parent.name}'")
+    elif parent not in collection.users_collection:
+        try:
+            parent.children.link(collection)
+        except Exception:
+            pass
+    return collection
+
 def handle_zw_object_creation(obj_data: dict, parent_bpy_obj=None):
     """Create a Blender object from a ZW-OBJECT definition."""
     if not bpy:
@@ -397,25 +418,7 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 
-# --- Stub Handlers for Unimplemented ZW Blocks ---
-def handle_zw_function_block(block_data: dict):
-    print(f"{P_WARN} handle_zw_function_block not yet implemented.")
 
-
-def handle_zw_driver_block(block_data: dict):
-    print(f"{P_WARN} handle_zw_driver_block not yet implemented.")
-
-
-def handle_zw_animation_block(block_data: dict):
-    print(f"{P_WARN} handle_zw_animation_block not yet implemented.")
-
-
-def handle_zw_camera_block(camera_data: dict, current_bpy_collection: bpy.types.Collection):
-    print(f"{P_WARN} handle_zw_camera_block not yet implemented.")
-
-
-def handle_zw_light_block(light_data: dict, current_bpy_collection: bpy.types.Collection):
-    print(f"{P_WARN} handle_zw_light_block not yet implemented.")
 
 
 # --- Main Processing Logic ---
