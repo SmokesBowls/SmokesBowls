@@ -154,7 +154,9 @@ def build_composite_prompt(seed_prompt_text: str, memory_path_str: str, limit: i
     for entry in recent_memory_entries:
         response_text = entry.get("response")
         if isinstance(response_text, str):
-            memory_block_parts.append(response_text.strip().rstrip("///").strip())
+            cleaned_resp = response_text.strip()
+            cleaned_resp = cleaned_resp.rstrip("///").strip()
+            memory_block_parts.append(cleaned_resp)
         elif response_text is not None:
             print(f"[!] Warning: Non-string response in memory: {type(response_text)}. Skipping.")
 
@@ -167,7 +169,8 @@ def build_composite_prompt(seed_prompt_text: str, memory_path_str: str, limit: i
         if memory_seed_content: # Only add if there's actual content after stripping/joining
              composite_parts.append(f"ZW-MEMORY-SEED:\n{memory_seed_content}\n///")
 
-    cleaned_seed_prompt = seed_prompt_text.strip().rstrip("///").strip()
+    cleaned_seed_prompt = seed_prompt_text.strip()
+    cleaned_seed_prompt = cleaned_seed_prompt.rstrip("///").strip()
     if cleaned_seed_prompt: # Only add if there's actual seed prompt content
         composite_parts.append(cleaned_seed_prompt)
 

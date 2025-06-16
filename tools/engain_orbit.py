@@ -5,7 +5,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional
 
 import datetime # Added for logging timestamp
 
@@ -33,13 +33,13 @@ def log_orbit_event(message: str):
         f.write(log_entry)
 # --- End Logging Setup ---
 
-def parse_zwx_file_and_extract_raw_intent(filepath: Path) -> Tuple[Optional[str], dict, Optional[str]]:
+def parse_zwx_file_and_extract_raw_intent(filepath: Path) -> tuple[Optional[str], dict, Optional[str]]:
     try:
         content = filepath.read_text(encoding="utf-8")
     except FileNotFoundError:
         # No print here, caller will log
         return None, {}, None
-    except Exception as e:
+    except Exception:
         # No print here, caller will log
         return None, {}, None
 
