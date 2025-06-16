@@ -10,11 +10,11 @@ from zw_mcp.utils import safe_eval
 
 
 def parse_color(value, default=(0.8, 0.8, 0.8, 1.0)):
+    """Convert a color definition to a 4-tuple usable by Blender."""
     if isinstance(value, (list, tuple)) and len(value) in (3, 4):
-        parsed = tuple(float(v) for v in value[:4])
-        if len(parsed) == 3:
-            return parsed + (1.0,)
-        return parsed
+        return tuple(float(v) for v in value[:4]) + (
+            (1.0,) if len(value) == 3 else ()
+        )
     return default
 
 # Standardized Prefixes
@@ -132,6 +132,8 @@ except ImportError:
                 print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
+# Holds the currently processed ZW file path during execution
+current_zw_input_file = None
 
 
 # --- Utility Functions ---
@@ -393,23 +395,29 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
 
 
 # --- Stub Handlers for unimplemented ZW blocks ---
-def handle_zw_light_block(*args, **kwargs):
-    print("[Stub] handle_zw_light_block not yet implemented.")
+def handle_zw_light_block(value, current_bpy_collection=None):
+    """Stub for future ZW-LIGHT implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-LIGHT block.")
 
-def handle_zw_function_block(*args, **kwargs):
-    print("[Stub] handle_zw_function_block not yet implemented.")
+def handle_zw_function_block(value):
+    """Stub for future ZW-FUNCTION implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-FUNCTION block.")
 
-def handle_zw_driver_block(*args, **kwargs):
-    print("[Stub] handle_zw_driver_block not yet implemented.")
+def handle_zw_driver_block(value):
+    """Stub for future ZW-DRIVER implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-DRIVER block.")
 
-def handle_zw_animation_block(*args, **kwargs):
-    print("[Stub] handle_zw_animation_block not yet implemented.")
+def handle_zw_animation_block(value):
+    """Stub for future ZW-ANIMATION implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-ANIMATION block.")
 
-def handle_zw_camera_block(*args, **kwargs):
-    print("[Stub] handle_zw_camera_block not yet implemented.")
+def handle_zw_camera_block(value, current_bpy_collection=None):
+    """Stub for future ZW-CAMERA implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-CAMERA block.")
 
-def handle_zw_stage_block(*args, **kwargs):
-    print("[Stub] handle_zw_stage_block not yet implemented.")
+def handle_zw_stage_block(value):
+    """Stub for future ZW-STAGE implementation."""
+    print(f"{P_INFO} [Stub] Skipping ZW-STAGE block.")
 
 
 
@@ -594,61 +602,55 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
 
 
 def run_blender_adapter(input_filepath_str: str = None):
-    current_zw_input_file = input_filepath_str
     print("--- Starting ZW Blender Adapter ---")
     if not bpy:
         print("[X] Blender Python environment (bpy) not detected. Cannot proceed.")
         print("--- ZW Blender Adapter Finished (with errors) ---")
         return
 
+    global current_zw_input_file
+    current_zw_input_file = input_filepath_str if input_filepath_str else str(ZW_INPUT_FILE_PATH)
+
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Determine the input file path
-    if input_filepath_str:
-        current_input_file_path = Path(input_filepath_str)
-        print(f"[*] Using input file from argument: {current_input_file_path}")
-    else:
-        # Fallback to the global ZW_INPUT_FILE_PATH if no argument is provided
-        # This maintains compatibility if the script is run directly without the --input arg
-        current_input_file_path = ZW_INPUT_FILE_PATH
-        print(f"[*] Using default input file (no --input argument): {current_input_file_path}")
+    print(f"[*] Using ZW input file: {current_zw_input_file}")
 
     try:
-        with open(current_input_file_path, "r", encoding="utf-8") as f:
+        with open(current_zw_input_file, "r", encoding="utf-8") as f:
             zw_text_content = f.read()
-        print(f"[*] Successfully read ZW file: {current_input_file_path}")
+        print(f"{P_INFO} Successfully read ZW file: {current_zw_input_file}")
     except FileNotFoundError:
-        print(f"[X] Error: ZW input file not found at '{current_input_file_path}'")
+        print(f"{P_ERROR} ZW input file not found at '{current_zw_input_file}'")
         print("--- ZW Blender Adapter Finished (with errors) ---")
         return
     except Exception as e:
-        print(f"[X] Error reading ZW file '{current_input_file_path}': {e}")
+        print(f"{P_ERROR} Error reading ZW file '{current_zw_input_file}': {e}")
         print("--- ZW Blender Adapter Finished (with errors) ---")
         return
 
     if not zw_text_content.strip():
-        print("[X] Error: ZW input file is empty.")
+        print(f"{P_ERROR} ZW input file is empty.")
         print("--- ZW Blender Adapter Finished (with errors) ---")
         return
 
 
     try:
-        print(f"{P_INFO} Parsing ZW text from '{input_filepath_str}'...")
+        print(f"{P_INFO} Parsing ZW text from '{current_zw_input_file}'...")
         parsed_zw_data = parse_zw(zw_text_content)
         if not parsed_zw_data:
-            print(f"{P_WARN} Parsed ZW data from '{input_filepath_str}' is empty. No objects will be created.")
+            print(f"{P_WARN} Parsed ZW data from '{current_zw_input_file}' is empty. No objects will be created.")
     except Exception as e:
-        print(f"{P_ERROR} Error parsing ZW text from '{input_filepath_str}': {e}")
+        print(f"{P_ERROR} Error parsing ZW text from '{current_zw_input_file}': {e}")
         print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
         return
 
     try:
         print(f"{P_INFO} Processing ZW structure for Blender object creation...")
         process_zw_structure(parsed_zw_data, current_bpy_collection=bpy.context.scene.collection)
-        print(f"{P_INFO} Finished processing ZW structure from '{input_filepath_str}'.")
+        print(f"{P_INFO} Finished processing ZW structure from '{current_zw_input_file}'.")
     except Exception as e:
-        print(f"{P_ERROR} Error during ZW structure processing for Blender from '{input_filepath_str}': {e}")
+        print(f"{P_ERROR} Error during ZW structure processing for Blender from '{current_zw_input_file}': {e}")
         print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---")
         return
 
