@@ -97,41 +97,31 @@ except ImportError as e_final:
 APPLY_ZW_MATERIAL_FUNC = None
 ZW_MESH_UTILS_IMPORTED = False
 try:
-    from .zw_mesh import apply_material as imported_apply_material
+    # Package style import
+    from zw_mcp.zw_mesh import apply_material as imported_apply_material
     APPLY_ZW_MATERIAL_FUNC = imported_apply_material
-    ZW_MESH_UTILS_IMPORTED = True # We only strictly need apply_material for ZW-COMPOSE material override
-    print("Successfully imported apply_material from .zw_mesh (relative).")
+    ZW_MESH_UTILS_IMPORTED = True
+    print("Successfully imported apply_material from zw_mcp.zw_mesh.")
 except ImportError:
-
-    print(f"{P_WARN} Could not import 'parse_zw' from 'zw_mcp.zw_parser'.")
     try:
-        from zw_parser import parse_zw # Attempt direct import if in same folder for some reason
-    except ImportError:
-        print(f"{P_WARN} Fallback import of 'parse_zw' also failed.")
-        print(f"{P_WARN} Ensure 'zw_parser.py' is accessible and zw_mcp is in PYTHONPATH or script is run appropriately.")
-        def parse_zw(text: str) -> dict:
-            print(f"{P_WARN} Dummy parse_zw called. Real parsing will not occur.")
-            return {}
-        # sys.exit(1) # Or exit if critical
+        # Relative import when running from within package
+        from .zw_mesh import apply_material as imported_apply_material
+        APPLY_ZW_MATERIAL_FUNC = imported_apply_material
+        ZW_MESH_UTILS_IMPORTED = True
+        print("Successfully imported apply_material from .zw_mesh.")
+    except Exception:
+        try:
+            # Fallback for direct execution from repo root
+            from zw_mesh import apply_material as imported_apply_material
+            APPLY_ZW_MATERIAL_FUNC = imported_apply_material
+            ZW_MESH_UTILS_IMPORTED = True
+            print("Successfully imported apply_material from zw_mesh (script directory).")
+        except ImportError as e_direct:
+            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct}")
+            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
+                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
-
-try:
-    from zw_mcp.zw_mesh import apply_material as pkg_imported_apply_material
-    APPLY_ZW_MATERIAL_FUNC = pkg_imported_apply_material
-    ZW_MESH_UTILS_IMPORTED = True
-    print("Successfully imported apply_material from zw_mcp.zw_mesh (package).")
-except ImportError as e_pkg_utils:
-    print(f"Failed package import of zw_mesh.apply_material: {e_pkg_utils}")
-    try:
-        from zw_mesh import apply_material as direct_imported_apply_material
-        APPLY_ZW_MATERIAL_FUNC = direct_imported_apply_material
-        ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported zw_mesh.apply_material (direct from script directory - fallback).")
-    except ImportError as e_direct_utils:
-        print(f"All import attempts for zw_mesh.apply_material failed: {e_direct_utils}")
-        def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
-            print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
 
 # --- Utility Functions ---
 def safe_eval(str_val, default_val):
@@ -407,6 +397,27 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
     return mesh_obj
 
 
+# --- Stub Handlers for Unimplemented ZW Blocks ---
+def handle_zw_function_block(block_data: dict):
+    print(f"{P_WARN} handle_zw_function_block not yet implemented.")
+
+
+def handle_zw_driver_block(block_data: dict):
+    print(f"{P_WARN} handle_zw_driver_block not yet implemented.")
+
+
+def handle_zw_animation_block(block_data: dict):
+    print(f"{P_WARN} handle_zw_animation_block not yet implemented.")
+
+
+def handle_zw_camera_block(camera_data: dict, current_bpy_collection: bpy.types.Collection):
+    print(f"{P_WARN} handle_zw_camera_block not yet implemented.")
+
+
+def handle_zw_light_block(light_data: dict, current_bpy_collection: bpy.types.Collection):
+    print(f"{P_WARN} handle_zw_light_block not yet implemented.")
+
+
 # --- Main Processing Logic ---
 def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_collection=None):
     if not bpy: return
@@ -585,28 +596,6 @@ def process_zw_structure(data_dict: dict, parent_bpy_obj=None, current_bpy_colle
         # else:
             # print(f"  Skipping non-dictionary, non-ZW-block value for key '{key}'")
 
- #ure/intent-routing-enhancements
-def run_blender_adapter():
-    print(f"{P_INFO} --- Starting ZW Blender Adapter ---")
-    if not bpy: print(f"{P_ERROR} Blender Python environment (bpy) not detected. Cannot proceed."); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    if bpy.context.object and bpy.context.object.mode != 'OBJECT': bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Argument parsing for input file
-    parser = argparse.ArgumentParser(description="Blender adapter for ZW MCP")
-    parser.add_argument('--input', type=str, help="Path to the ZW input file", default=str(ZW_INPUT_FILE_PATH))
-
-    # Blender's Python interpreter passes arguments after '--'
-    args_to_parse = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    args = parser.parse_args(args_to_parse)
-
-    current_zw_input_file = Path(args.input)
-
-    try:
-        with open(current_zw_input_file, "r", encoding="utf-8") as f: zw_text_content = f.read()
-        print(f"{P_INFO} Successfully read ZW file: {current_zw_input_file}")
-    except FileNotFoundError: print(f"{P_ERROR} ZW input file not found at '{current_zw_input_file}'"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    except Exception as e: print(f"{P_ERROR} Error reading ZW file '{current_zw_input_file}': {e}"); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
-    if not zw_text_content.strip(): print(f"{P_ERROR} ZW input file is empty: '{current_zw_input_file}'."); print(f"{P_INFO} --- ZW Blender Adapter Finished (with errors) ---"); return
 
 def run_blender_adapter(input_filepath_str: str = None):
     print("--- Starting ZW Blender Adapter ---")
