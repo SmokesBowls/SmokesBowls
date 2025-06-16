@@ -37,7 +37,8 @@ def handle_client(conn, addr):
         return
 
 
-    prompt = "".join(data).strip().rstrip("///").strip()
+    prompt = "".join(data).strip()
+    prompt = prompt.rstrip("///").strip()
     if not prompt:
         print(f"[-] Empty prompt received from {addr} after stripping '///'. Closing connection.")
         conn.close()

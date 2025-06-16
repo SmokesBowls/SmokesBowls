@@ -6,7 +6,7 @@ import argparse
 import math  # Added for math.radians
 from mathutils import Vector, Euler  # For ZW-COMPOSE transforms
 
-from zw_mcp.utils import safe_eval
+from zw_mcp.utils import safe_eval, parse_color
 
 # Standardized Prefixes
 P_INFO = "[ZW->Blender][INFO]"
@@ -124,26 +124,8 @@ except ImportError:
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
 
-# --- Utility Functions ---
 
-def parse_color(color_input, default_color=(0.8, 0.8, 0.8, 1.0)):
-    if isinstance(color_input, str):
-        s = color_input.strip()
-        if s.startswith("#"):
-            s = s[1:]
-        try:
-            if len(s) == 6:
-                r, g, b = (int(s[i:i+2], 16) / 255.0 for i in (0, 2, 4))
-                return (r, g, b, 1.0)
-        except Exception:
-            pass
-    elif isinstance(color_input, (list, tuple)) and len(color_input) in (3, 4):
-        return (
-            tuple(float(x) for x in color_input) + (1.0,)
-            if len(color_input) == 3
-            else tuple(float(x) for x in color_input)
-        )
-    return default_color
+# --- Utility Functions ---
 
 def get_or_create_collection(name: str, parent_collection=None):
     """Retrieve or create a Blender collection by name."""
