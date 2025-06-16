@@ -172,6 +172,27 @@ def parse_color(color_val, default=(1.0, 1.0, 1.0, 1.0)):
     return default
 
 
+def get_or_create_collection(name: str, parent_collection=None):
+    """Retrieve or create a Blender collection by name."""
+    if not bpy:
+        return None
+
+    if not name:
+        return bpy.context.scene.collection
+
+    parent = parent_collection or bpy.context.scene.collection
+    collection = bpy.data.collections.get(name)
+    if not collection:
+        collection = bpy.data.collections.new(name)
+        parent.children.link(collection)
+        print(f"{P_INFO} Created collection '{name}' under '{parent.name}'")
+    elif parent not in collection.users_collection:
+        try:
+            parent.children.link(collection)
+        except Exception:
+            pass
+    return collection
+
 def handle_zw_object_creation(obj_data: dict, parent_bpy_obj=None):
     """Create a Blender object from a ZW-OBJECT definition."""
     if not bpy:
@@ -405,6 +426,121 @@ def handle_zw_mesh_block(mesh_data: dict, current_bpy_collection: bpy.types.Coll
 
     print(f"    ✅ Successfully created ZW-MESH (integrated): {mesh_name}")
     return mesh_obj
+
+
+def handle_zw_camera_block(cam_data: dict, current_bpy_collection=None):
+    """Create a Blender camera from a ZW-CAMERA block."""
+    if not bpy:
+        return None
+
+    collection = current_bpy_collection or bpy.context.scene.collection
+
+    cam_name = cam_data.get("NAME", "ZW_Camera")
+    loc = safe_eval(cam_data.get("LOCATION", "(0,0,0)"), (0, 0, 0))
+    rot_deg = safe_eval(cam_data.get("ROTATION", "(0,0,0)"), (0, 0, 0))
+
+    bpy.ops.object.camera_add(location=loc)
+    cam_obj = bpy.context.active_object
+    if not cam_obj:
+        print(f"{P_ERROR} Failed to create camera '{cam_name}'.")
+        return None
+
+    cam_obj.name = cam_name
+    cam_obj.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+
+    fov = cam_data.get("FOV")
+    if fov is not None:
+        try:
+            cam_obj.data.angle = math.radians(float(fov))
+        except Exception:
+            pass
+
+    clip_start = cam_data.get("CLIP_START")
+    if clip_start is not None:
+        try:
+            cam_obj.data.clip_start = float(clip_start)
+        except Exception:
+            pass
+
+    clip_end = cam_data.get("CLIP_END")
+    if clip_end is not None:
+        try:
+            cam_obj.data.clip_end = float(clip_end)
+        except Exception:
+            pass
+
+    track_target_name = cam_data.get("TRACK_TARGET")
+    if track_target_name:
+        target = bpy.data.objects.get(str(track_target_name))
+        if target:
+            constraint = cam_obj.constraints.new('TRACK_TO')
+            constraint.target = target
+            constraint.track_axis = 'TRACK_NEGATIVE_Z'
+            constraint.up_axis = 'UP_Y'
+
+    coll_name = cam_data.get("COLLECTION")
+    target_collection = collection
+    if coll_name:
+        target_collection = get_or_create_collection(str(coll_name), bpy.context.scene.collection)
+
+    for c in cam_obj.users_collection:
+        c.objects.unlink(cam_obj)
+    if cam_obj.name not in target_collection.objects:
+        target_collection.objects.link(cam_obj)
+
+    print(f"    ✅ Created camera '{cam_obj.name}' in collection '{target_collection.name}'")
+    return cam_obj
+
+
+def handle_zw_light_block(light_data: dict, current_bpy_collection=None):
+    """Create a Blender light from a ZW-LIGHT block."""
+    if not bpy:
+        return None
+
+    collection = current_bpy_collection or bpy.context.scene.collection
+
+    light_name = light_data.get("NAME", "ZW_Light")
+    light_type = str(light_data.get("TYPE", "POINT")).upper()
+    loc = safe_eval(light_data.get("LOCATION", "(0,0,0)"), (0, 0, 0))
+    rot_deg = safe_eval(light_data.get("ROTATION", "(0,0,0)"), (0, 0, 0))
+    color = parse_color(light_data.get("COLOR", "#FFFFFF"))
+    energy = float(light_data.get("ENERGY", 10.0))
+    shadow_str = str(light_data.get("SHADOW", "true")).lower()
+    use_shadow = shadow_str not in ["false", "0", "no", "off"]
+
+    light_data_block = bpy.data.lights.new(name=light_name, type=light_type)
+    light_obj = bpy.data.objects.new(light_name, light_data_block)
+    light_obj.location = loc
+    light_obj.rotation_euler = Euler([math.radians(a) for a in rot_deg], 'XYZ')
+
+    light_data_block.color = color[:3]
+    light_data_block.energy = energy
+    light_data_block.use_shadow = use_shadow
+
+    size_val = light_data.get("SIZE")
+    if size_val is not None:
+        try:
+            light_data_block.size = float(size_val)
+        except Exception:
+            pass
+
+    angle_val = light_data.get("ANGLE")
+    if angle_val is not None and hasattr(light_data_block, "angle"):
+        try:
+            light_data_block.angle = float(angle_val)
+        except Exception:
+            pass
+
+    coll_name = light_data.get("COLLECTION")
+    target_collection = collection
+    if coll_name:
+        target_collection = get_or_create_collection(str(coll_name), bpy.context.scene.collection)
+
+    if light_obj.name not in target_collection.objects:
+        target_collection.objects.link(light_obj)
+
+    print(f"    ✅ Created light '{light_obj.name}' in collection '{target_collection.name}'")
+    return light_obj
 
 
 # --- Main Processing Logic ---
