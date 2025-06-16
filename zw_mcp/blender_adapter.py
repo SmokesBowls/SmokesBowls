@@ -114,22 +114,15 @@ try:
     print("Successfully imported apply_material from zw_mcp.zw_mesh.")
 except ImportError:
     try:
-        # Relative import when running from within package
-        from .zw_mesh import apply_material as imported_apply_material
+        # Fallback for direct execution from repo root or script directory
+        from zw_mesh import apply_material as imported_apply_material
         APPLY_ZW_MATERIAL_FUNC = imported_apply_material
         ZW_MESH_UTILS_IMPORTED = True
-        print("Successfully imported apply_material from .zw_mesh.")
-    except Exception:
-        try:
-            # Fallback for direct execution from repo root
-            from zw_mesh import apply_material as imported_apply_material
-            APPLY_ZW_MATERIAL_FUNC = imported_apply_material
-            ZW_MESH_UTILS_IMPORTED = True
-            print("Successfully imported apply_material from zw_mesh (script directory).")
-        except ImportError as e_direct:
-            print(f"All import attempts for zw_mesh.apply_material failed: {e_direct}")
-            def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
-                print("[Critical Error] zw_mesh.apply_material was not imported. Cannot apply material override in ZW-COMPOSE.")
+        print("Successfully imported apply_material from zw_mesh.")
+    except ImportError as e_direct:
+        print(f"All import attempts for zw_mesh.apply_material failed: {e_direct}")
+        def APPLY_ZW_MATERIAL_FUNC(obj, material_def):
+            print("[Stub] apply_material not available. Skipping material assignment.")
 
 ZW_INPUT_FILE_PATH = Path("zw_mcp/prompts/blender_scene.zw")  # Default, can be overridden by args
 # Holds the currently processed ZW file path during execution
