@@ -1,24 +1,28 @@
-
-
 import argparse
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Optional
-
-from tools.intent_utils import validate_zw_intent_block
-
-import datetime # Added for logging timestamp
+#from tools.intent_utils import validate_zw_intent_block
+import datetime # Added for logging timestamp - UNCOMMENT THIS
 
 # Corrected sys.path modification:
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
-sys.path.append(str(PROJECT_ROOT))
-# Placeholder for BLENDER_EXECUTABLE_PATH
-BLENDER_EXECUTABLE_PATH = "blender"
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()  # UNCOMMENT THIS
+#sys.path.append(str(PROJECT_ROOT))  # Keep this commented
+#try:
+ #   from tools.intent_utils import validate_zw_intent_block
+#except ImportError:#
+    # Fallback for w#hen called from subprocess
+    #import sys#
+   # sys.path.in#sert(0, str(PROJECT_ROOT / "tools"))
+# Replace the try block with:
+pass
+  #  from intent_utils import validate_zw_intent_block# Placeholder for BLENDER_EXECUTABLE_PATH
+BLENDER_EXECUTABLE_PATH = "/home/tran/Downloads/blender-4.4.3-linux-x64/blender"
 
 # --- Logging Setup ---
-LOG_DIR = PROJECT_ROOT / "zw_mcp" / "logs"
+LOG_DIR = PROJECT_ROOT / "zw_mcp" / "logs"  # This needs PROJECT_ROOT
 LOG_FILE = LOG_DIR / "orbit_exec.log"
 
 def ensure_log_dir_exists():
@@ -76,7 +80,7 @@ def route_to_blender(zw_payload: str, source_file_name: str):
 
         subprocess.run([
             str(BLENDER_EXECUTABLE_PATH),
-            "--background",
+     #"--background",
             "--python",
             str(blender_adapter_path),
             "--",

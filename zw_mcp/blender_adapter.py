@@ -1,3 +1,17 @@
+import sys
+from pathlib import Path
+
+# Add project root to path
+script_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(script_dir))
+
+import sys
+from pathlib import Path
+
+# Add project root to path
+script_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(script_dir))
+
 # zw_mcp/blender_adapter.py
 import sys
 import json  # For potential pretty printing if needed, not directly for to_zw
@@ -8,6 +22,10 @@ from mathutils import Vector, Euler  # For ZW-COMPOSE transforms
 
 from zw_mcp.utils import safe_eval
 
+# Add the project root to sys.path if not already there
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
 def parse_color(value, default=(0.8, 0.8, 0.8, 1.0)):
     """Convert a color definition to a 4-tuple usable by Blender."""
