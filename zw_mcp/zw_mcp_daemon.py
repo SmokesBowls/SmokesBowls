@@ -1,94 +1,115 @@
-# zw_mcp/zw_mcp_daemon.py
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 import socket
 import os
 import threading
-import subprocess  # ← Add this line
-import time  # ← Add this line
+import subprocess
+import time
 from pathlib import Path
 from datetime import datetime
 from ollama_handler import query_ollama
 
+# --- Config / Paths ---
 LOG_PATH = Path("zw_mcp/logs/daemon.log")
 BUFFER_SIZE = 4096
-PORT = 7421
-HOST = "127.0.0.1"  # Change to "0.0.0.0" for LAN
 
-class ZWHTTPHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        if self.path == '/process_zw':
-            # Enable CORS
-            self.send_response(200)
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.send_header('Access-Control-Allow-Methods', 'POST')
-            self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-            self.send_header('Content-Type', 'application/json')
-            self.end_headers()
-            
-            # Get ZW data from request
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-            zw_content = data.get('zw_data', '')
-            
-            # Process with Ollama (same as TCP handler)
-            response = query_ollama(zw_content)
-            log(zw_content, response)
-            
-            # Return response
-            self.wfile.write(json.dumps({'status': 'success', 'response': response}).encode())
-        
-        # In your HTTP handler, add option for direct Blender routing
-        if data.get('route_to_blender', False):
-            temp_file = f'/tmp/web_zw_{int(time.time())}.zw'
-            with open(temp_file, 'w') as f:
-                f.write(zw_content)
-            # Then change the subprocess call to:
-            project_root = os.path.dirname(os.path.abspath(__file__)).replace('/zw_mcp', '')
-            subprocess.run(['python3', 'tools/engain_orbit.py', temp_file], 
-               cwd=project_root)
+# TCP server (client_example.py talks to this)
+HOST = os.getenv("ZW_MCP_HOST", "127.0.0.1")
+PORT = int(os.getenv("ZW_MCP_PORT", "7421"))
 
-    def do_OPTIONS(self):
-        # Handle CORS preflight
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'POST')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+# HTTP server (browser / local tools can POST here)
+HTTP_HOST = os.getenv("ZW_MCP_HTTP_HOST", "127.0.0.1")
+HTTP_PORT = int(os.getenv("ZW_MCP_HTTP_PORT", "1111"))
 
-def start_http_server():
-    server = HTTPServer(('localhost', 1111), ZWHTTPHandler)
-    print(f"🌐 ZW MCP HTTP Server listening on localhost:1111")
-    server.serve_forever()
-
-# In start_server(), add:
-def start_server():
-    # ... existing TCP code ...
-    
-    # Start HTTP server in separate thread
-    http_thread = threading.Thread(target=start_http_server)
-    http_thread.daemon = True
-    http_thread.start()
-
+# --- Logging ---
 def log(prompt: str, response: str):
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(f"\n--- Incoming [{datetime.now()}] ---\n{prompt}\n")
         f.write(f"\n--- Response ---\n{response}\n")
 
+# --- HTTP Handler ---
+class ZWHTTPHandler(BaseHTTPRequestHandler):
+    def _send_json(self, code: int, payload: dict):
+        self.send_response(code)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(payload).encode('utf-8'))
+
+    def do_OPTIONS(self):
+        # CORS preflight
+        self._send_json(200, {"ok": True})
+
+    def do_POST(self):
+        if self.path != "/process_zw":
+            self._send_json(404, {"error": "not found"})
+            return
+
+        # Read body safely
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length > 0 else b"{}"
+            data = json.loads(raw.decode("utf-8"))
+        except Exception as e:
+            self._send_json(400, {"error": f"bad json: {e}"})
+            return
+
+        zw_content = data.get("zw_data", "")
+        if not isinstance(zw_content, str) or not zw_content.strip():
+            self._send_json(400, {"error": "missing or empty 'zw_data'"})
+            return
+
+        # Call Ollama and (optionally) route to Blender BEFORE we reply
+        try:
+            response_text = query_ollama(zw_content)
+            log(zw_content, response_text)
+        except Exception as e:
+            self._send_json(502, {"error": f"ollama: {e}"})
+            return
+
+        if data.get("route_to_blender"):
+            try:
+                temp_file = f"/tmp/web_zw_{int(time.time())}.zw"
+                with open(temp_file, "w", encoding="utf-8") as f:
+                    f.write(zw_content)
+
+                project_root = Path(__file__).resolve().parents[1]  # repo root
+                # Fire-and-forget; if you want to block, use run(..., check=True)
+                subprocess.Popen(
+                    ["python3", "tools/engain_orbit.py", temp_file],
+                    cwd=str(project_root)
+                )
+            except Exception as e:
+                # Non-fatal: return response but include routing error
+                self._send_json(200, {"status": "success", "response": response_text, "blender_error": str(e)})
+                return
+
+        self._send_json(200, {"status": "success", "response": response_text})
+
+# --- HTTP server thread ---
+def start_http_server():
+    # allow quick rebinds after crash
+    HTTPServer.allow_reuse_address = True
+    server = HTTPServer((HTTP_HOST, HTTP_PORT), ZWHTTPHandler)
+    print(f"🌐 ZW MCP HTTP Server listening on {HTTP_HOST}:{HTTP_PORT}")
+    server.serve_forever()
+
+# --- TCP client handling ---
 def handle_client(conn, addr):
     print(f"[+] Connected: {addr}")
-    data = []
+    data_chunks = []
     try:
         while True:
-            chunk = conn.recv(BUFFER_SIZE).decode("utf-8")
+            chunk = conn.recv(BUFFER_SIZE)
             if not chunk:
-                # Connection closed by client before sending "///" or anything
                 print(f"[-] Connection from {addr} closed prematurely.")
                 return
-            data.append(chunk)
-            if chunk.strip().endswith("///"):
+            decoded = chunk.decode("utf-8", errors="replace")
+            data_chunks.append(decoded)
+            if decoded.strip().endswith("///"):
                 break
     except ConnectionResetError:
         print(f"[!] Connection reset by {addr} during receive.")
@@ -97,9 +118,7 @@ def handle_client(conn, addr):
         print(f"[!] Error receiving data from {addr}: {e}")
         return
 
-
-    prompt = "".join(data).strip()
-    prompt = prompt.rstrip("///").strip()
+    prompt = "".join(data_chunks).strip().rstrip("///").strip()
     if not prompt:
         print(f"[-] Empty prompt received from {addr} after stripping '///'. Closing connection.")
         conn.close()
@@ -118,17 +137,16 @@ def handle_client(conn, addr):
 
     log(prompt, response if 'response' in locals() else "ERROR: No response generated")
 
+# --- TCP accept loop + HTTP thread ---
 def start_server():
-    # Ensure log directory exists at startup
+    # Ensure log dir exists once
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    # Start HTTP server in separate thread
-    http_thread = threading.Thread(target=start_http_server)
-    http_thread.daemon = True
+    # HTTP in background
+    http_thread = threading.Thread(target=start_http_server, daemon=True)
     http_thread.start()
 
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        # ... rest of your existing TCP code ...
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             server.bind((HOST, PORT))
@@ -139,18 +157,16 @@ def start_server():
         server.listen()
         print(f"🌐 ZW MCP Daemon listening on {HOST}:{PORT} ...")
         print(f"ℹ️ Logging interactions to: {LOG_PATH.resolve()}")
+
         while True:
             try:
                 conn, addr = server.accept()
-                thread = threading.Thread(target=handle_client, args=(conn, addr))
-                thread.daemon = True # Allow main program to exit even if threads are running
-                thread.start()
+                threading.Thread(target=handle_client, args=(conn, addr), daemon=True).start()
             except KeyboardInterrupt:
                 print("\n[!] Server shutting down...")
                 break
             except Exception as e:
                 print(f"[!] Error accepting connection: {e}")
-                # Potentially add a small delay here if errors are too frequent
 
 if __name__ == "__main__":
     start_server()
