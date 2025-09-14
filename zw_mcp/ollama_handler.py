@@ -1,18 +1,43 @@
-# ollama_handler.py
+import os
 import requests
+from typing import List, Dict, Any, Optional
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3"  # or whatever you're using, e.g., "phi", "mistral"
+# Allow override; default to the healthy port you verified
+OLLAMA_BASE = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 
-def query_ollama(prompt: str) -> str:
+# Endpoints
+GEN_URL  = f"{OLLAMA_BASE}/api/generate"  # one-shot prompt
+CHAT_URL = f"{OLLAMA_BASE}/api/chat"      # multi-turn messages
+
+# Default model (keep small for 1050 Ti)
+DEFAULT_MODEL = os.getenv("ZW_MCP_MODEL", "llama3.2")
+
+def _post(url: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    print(f"[OLLAMA] POST {url} :: {payload.get('model')}", flush=True)
+    r = requests.post(url, json=payload, timeout=120)
+    if r.status_code != 200:
+        raise RuntimeError(f"Ollama error {r.status_code}: {r.text[:800]}")
+    return r.json()
+
+def generate(prompt: str, model: Optional[str] = None, stream: bool = False) -> Dict[str, Any]:
     payload = {
-        "model": MODEL_NAME,
+        "model": model or DEFAULT_MODEL,
         "prompt": prompt,
-        "stream": False  # Set True for streaming
+        "stream": stream,
     }
-    try:
-        response = requests.post(OLLAMA_URL, json=payload)
-        response.raise_for_status()
-        return response.json().get("response", "").strip()
-    except Exception as e:
-        return f"ERROR: {str(e)}"
+    return _post(GEN_URL, payload)
+
+def chat(messages: List[Dict[str, str]], model: Optional[str] = None, stream: bool = False) -> Dict[str, Any]:
+    # messages like: [{"role":"user","content":"..."}]
+    payload = {
+        "model": model or DEFAULT_MODEL,
+        "messages": messages,
+        "stream": stream,
+    }
+    return _post(CHAT_URL, payload)
+
+# What the daemon imports
+def query_ollama(prompt: str, model: Optional[str] = None) -> str:
+    data = generate(prompt, model=model, stream=False)
+    # /api/generate returns {"response": "...", ...}
+    return data.get("response", "")
