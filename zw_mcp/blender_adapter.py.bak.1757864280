@@ -1,4 +1,3 @@
-from __future__ import annotations
 # ... (existing imports and setup code remains the same)
 
 # --- New Asset Import Helpers ---
@@ -410,47 +409,4 @@ def handle_zw_camera_block(camera_data: dict, current_bpy_collection=None):
     print(f"{P_INFO} Created camera: {camera_name}")
     return camera_obj
 
-# ... (rest of the file remains the same)if __name__ == "__main__":
-    from __future__ import annotations
-    import os, sys, traceback
-    try:
-        print("--- Starting ZW Blender Adapter ---")
-        ZW_INPUT = os.environ.get("ZW_INPUT_FILE", "zw_mcp/prompts/blender_scene.zw")
-        print(f"[*] Using ZW input file: {ZW_INPUT}")
-
-        # Ensure repo root & zw_mcp are importable
-        REPO_ROOT = os.path.dirname(os.path.abspath(__file__)).rsplit("/zw_mcp", 1)[0]
-        if REPO_ROOT not in sys.path:
-            sys.path.append(REPO_ROOT)
-        if os.path.join(REPO_ROOT, "zw_mcp") not in sys.path:
-            sys.path.append(os.path.join(REPO_ROOT, "zw_mcp"))
-
-        # Import parser and parse the scene
-        from zw_mcp.zw_parser import parse_zw
-        with open(ZW_INPUT, "r", encoding="utf-8") as f:
-            zw_text = f.read()
-        data = parse_zw(zw_text)
-
-        # Prefer the adapter's own dispatcher if present
-        if 'process_zw_structure' in globals():
-            process_zw_structure(data)
-        else:
-            # Minimal fallback: handle ZW-MESH blocks so we see output
-            import bpy
-            coll = bpy.context.scene.collection
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    if k.strip().upper() == "ZW-MESH":
-                        if isinstance(v, list):
-                            for item in v:
-                                try: handle_zw_mesh_block(item, coll)
-                                except Exception: traceback.print_exc()
-                        elif isinstance(v, dict):
-                            handle_zw_mesh_block(v, coll)
-
-        print("[ZW->Blender][SUCCESS] --- ZW Blender Adapter Finished Successfully ---")
-    except SystemExit:
-        raise
-    except Exception as e:
-        print("[ZW->Blender][ERROR]", e)
-        traceback.print_exc()
+# ... (rest of the file remains the same)
